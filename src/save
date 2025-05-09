@@ -1,10 +1,9 @@
 "use client";
+
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import NewAuthModal from "../components/LoginModal"; // Import the completely redesigned modal component
-import logoImage from '../public/logo.png'; // Adjust path as needed
 
 // Icons - using a more minimal, modern approach
 import { 
@@ -30,10 +29,6 @@ export default function Homepage() {
   const [scrollY, setScrollY] = useState(0);
   const videoRef = useRef(null);
   
-  // Auth modal state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
-
   // Update scroll position for effects
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -44,26 +39,10 @@ export default function Homepage() {
   // Video player handler
   const playVideo = () => {
     if (videoRef.current) {
-      // videoRef.current.play();
+      videoRef.current.play();
     }
   };
   
-  // Auth modal handlers
-  const openLoginModal = () => {
-    setAuthModalMode("login");
-    setIsAuthModalOpen(true);
-  };
-  
-  const openSignupModal = () => {
-    setAuthModalMode("signup");
-    setIsAuthModalOpen(true);
-  };
-  
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-  };
-  
-
   // Example use cases - these would showcase different ways businesses can use the platform
   const useCases = [
     {
@@ -157,12 +136,6 @@ export default function Homepage() {
         <div className="absolute -bottom-20 -left-40 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-pink-600/20 to-orange-600/20 blur-[100px]"></div>
       </div>
       
-      <NewAuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={closeAuthModal} 
-        initialMode={authModalMode} 
-      />
-      
       {/* Navigation */}
       <header 
         className="fixed w-full z-50 transition-all duration-300"
@@ -174,17 +147,10 @@ export default function Homepage() {
       >
         <div className="container mx-auto px-4 md:px-6 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-2">
-          <div className="container mx-auto px-4 md:px-6 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <Image 
-              src={logoImage}
-              alt="Rainien Logo"
-              width={140}
-              height={86}
-              className="h-auto"
-            />
-          </Link>  
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-800/20">
+              <span className="text-xl font-extrabold">R</span>
             </div>
+            <span className="font-bold text-xl tracking-tight">Rainien</span>
           </Link>
           
           {/* Desktop Navigation */}
@@ -194,18 +160,15 @@ export default function Homepage() {
             <a href="#pricing" className="text-sm text-zinc-300 hover:text-white transition-colors">Pricing</a>
             <a href="#testimonials" className="text-sm text-zinc-300 hover:text-white transition-colors">Testimonials</a>
             <div className="pl-6 flex items-center gap-3">
-              <button
-                onClick={openLoginModal}
-                className="px-4 py-2 text-sm text-zinc-300 hover:text-white transition-colors"
-              >
+              <Link href="/login" className="px-4 py-2 text-sm text-zinc-300 hover:text-white transition-colors">
                 Log In
-              </button>
-              <button
-                onClick={openSignupModal}
+              </Link>
+              <Link 
+                href="/signup" 
                 className="px-5 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-sm font-medium hover:shadow-lg hover:shadow-purple-600/20 transition-all"
               >
                 Sign Up Free
-              </button>
+              </Link>
             </div>
           </nav>
           
@@ -258,27 +221,21 @@ export default function Homepage() {
                   Testimonials
                 </a>
                 <div className="flex flex-col gap-3 mt-2">
-                <div className="flex flex-col gap-3 mt-2">
-                  <button
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      openLoginModal();
-                    }}
+                  <Link 
+                    href="/login" 
                     className="py-3 px-4 text-center text-zinc-300 border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     Log In
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      openSignupModal();
-                    }}
+                  </Link>
+                  <Link 
+                    href="/signup" 
                     className="py-3 px-4 text-center bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-medium"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     Sign Up Free
-                  </button>
+                  </Link>
                 </div>
-              </div>
               </div>
             </motion.div>
           )}
@@ -796,6 +753,3 @@ export default function Homepage() {
     </div>
   );
 }
-
-
-
