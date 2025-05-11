@@ -1,10 +1,11 @@
+// src/app/api/aimodels/[id]/nodes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createNode, deleteNode, handleAIBuilderError } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get user from session
@@ -13,6 +14,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const modelId = params.id;
     
     // Parse request body
@@ -30,9 +33,10 @@ export async function POST(
     return handleAIBuilderError(error);
   }
 }
+
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get user from session
@@ -41,6 +45,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const modelId = params.id;
     
     // Parse request body

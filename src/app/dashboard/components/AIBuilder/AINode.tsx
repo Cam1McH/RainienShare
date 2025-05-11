@@ -36,10 +36,7 @@ function AINode({
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isDraggingConnection, setIsDraggingConnection] = useState(false);
-  const [startMousePosition, setStartMousePosition] = useState({ x: 0, y: 0 });
-  const [startNodePosition, setStartNodePosition] = useState({ x: 0, y: 0 });
-  const [dragDelay, setDragDelay] = useState(0);
-  const [timerId, setTimerId] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   // Fixed node dimensions
   const NODE_WIDTH = 240;
@@ -85,44 +82,60 @@ function AINode({
   
   const nodeStyles = getNodeStyles();
   
-  // Node dragging logic with delay for settings
+  // Node dragging logic
   const handleMouseDown = (e: React.MouseEvent) => {
     // Don't start drag on buttons or connection ports
     if ((e.target as HTMLElement).closest('.node-action') || 
         (e.target as HTMLElement).closest('.connection-port')) return;
     
     e.stopPropagation();
+    onSelect();
     
-    // Add a delay before showing settings
-    const delayTimer = setTimeout(() => {
-      onSelect();
-    }, 200); // 200ms delay
+    // Calculate the offset from node position to mouse position
+    const rect = nodeRef.current?.getBoundingClientRect();
+    if (rect) {
+      const currentTransform = new DOMMatrix(getComputedStyle(nodeRef.current!).transform);
+      const offsetX = e.clientX - (node.x * canvasScale + currentTransform.e);
+      const offsetY = e.clientY - (node.y * canvasScale + currentTransform.f);
+      
+      setDragOffset({ x: offsetX, y: offsetY });
+    }
     
     setIsDraggingNode(true);
     setIsDragging(true);
-    setStartMousePosition({ x: e.clientX, y: e.clientY });
-    setStartNodePosition({ x: node.x, y: node.y });
   };
   
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDraggingNode) return;
+  // Global mouse events handler
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingNode) {
+        e.preventDefault();
+        
+        // Calculate new position considering canvas scale and drag offset
+        const newX = (e.clientX - dragOffset.x) / canvasScale;
+        const newY = (e.clientY - dragOffset.y) / canvasScale;
+        
+        onMove(newX, newY);
+      }
+    };
     
-    // Clear the delay timer if we start dragging
-    clearTimeout(dragDelay);
+    const handleMouseUp = () => {
+      if (isDraggingNode) {
+        setIsDraggingNode(false);
+        setIsDragging(false);
+      }
+    };
     
-    const dx = (e.clientX - startMousePosition.x) / canvasScale;
-    const dy = (e.clientY - startMousePosition.y) / canvasScale;
-    
-    onMove(startNodePosition.x + dx, startNodePosition.y + dy);
-  };
-  
-  const handleMouseUp = () => {
     if (isDraggingNode) {
-      setIsDraggingNode(false);
-      setIsDragging(false);
-      clearTimeout(dragDelay);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
     }
-  };
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingNode, dragOffset, canvasScale, onMove, setIsDragging]);
   
   // Connection dragging from node
   const handleConnectionMouseDown = (e: React.MouseEvent, isOutput: boolean) => {
@@ -149,28 +162,6 @@ function AINode({
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
-  
-  // Global mouse events
-  useEffect(() => {
-    if (isDraggingNode) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      clearTimeout(dragDelay);
-    };
-  }, [isDraggingNode, startMousePosition, startNodePosition, canvasScale]);
-  
-  useEffect(() => {
-    return () => {
-      if (timerId !== null) {
-        clearTimeout(timerId);
-      }
-    };
-  }, [timerId]);
 
   return (
     <div
@@ -198,7 +189,7 @@ function AINode({
       >
         {/* Header */}
         <div 
-          className="px-4 py-3 flex items-center justify-between"
+          className="px-4 py-3 flex items-center justify-between cursor-move"
           style={{
             backgroundColor: nodeStyles.bg,
             borderBottomColor: nodeStyles.border,
@@ -261,9 +252,7 @@ function AINode({
             onMouseDown={(e) => handleConnectionMouseDown(e, false)}
             onClick={(e) => {
               e.stopPropagation();
-              setTimerId(setTimeout(() => {
               onEndConnection(id);
-              }, 200) as unknown as number);
             }}
           >
             <div 

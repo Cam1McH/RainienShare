@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, Plus, Edit, Trash, MoreVertical, Copy, Play } from "lucide-react";
+import { Plus, Edit, Trash, Play, Pause, Copy, MoreVertical, Search, Filter, Download, Upload, Zap, ArrowRight } from "lucide-react";
 import { Theme } from "../../types";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import CreateAIModelModal from "../modals/CreateAIModelModal";
-import { useAIBuilderContext } from "../../contexts/AIBuilderContext";
+import DeleteBotModal from "../modals/DeleteBotModal";
+import TemplateGallery from "../AIBuilder/TemplateGallery";
+import { useAIBuilderContext } from '../../contexts/AIBuilderContext';
+import { AIModel } from '@/lib/api/aiBuilderTypes';
 
 interface AIModelsSectionProps {
   theme: Theme;
@@ -13,243 +16,503 @@ interface AIModelsSectionProps {
   launchAIBuilder: (modelId?: string) => void;
 }
 
+type ModelStatus = 'active' | 'inactive' | 'draft';
+
 export default function AIModelsSection({
   theme,
   setActiveTab,
   launchAIBuilder
 }: AIModelsSectionProps) {
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showActions, setShowActions] = useState<string | null>(null);
-  const [loadAttempted, setLoadAttempted] = useState(false);
-  
-  // Use the AIBuilderContext instead of mock data
-  const {
-    models,
-    loadModels,
-    isLoading,
-    deleteModel,
-    createModel
+  const { 
+    models, 
+    loadModels, 
+    isLoading, 
+    error, 
+    createModel, 
+    deleteModel, 
+    updateModel, 
+    loadTemplates, 
+    templates 
   } = useAIBuilderContext();
-
-  // Load models on component mount
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<AIModel | null>(null);
+  const [showActions, setShowActions] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<'all' | ModelStatus>('all');
+  const [isOperating, setIsOperating] = useState(false);
+  
+  // Load models and templates on mount
   useEffect(() => {
-    // Add error handling to prevent continuous retries
-    if (!isLoading) {
-      loadModels().catch(error => {
-        console.error("Failed to load models:", error);
-        // Set a flag to prevent continuous retries
-        setLoadAttempted(true);
-      });
-    }
-
-    // Include loadModels and isLoading in the dependency array
-  }, [loadModels, isLoading]);
-
+    loadModels();
+    loadTemplates();
+  }, []);
+  
+  // Filter models based on search and status
+  const filteredModels = models.filter(model => {
+    const matchesSearch = model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (model.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || model.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+  
   const handleCreateNew = () => {
     setShowCreateModal(true);
   };
   
   const handleEditModel = (modelId: string) => {
+    setShowActions(null);
     launchAIBuilder(modelId);
-    setShowActions(null);
   };
   
-  const handleDuplicateModel = async (modelId: string) => {
-    // Find the model to duplicate
-    const modelToDuplicate = models.find(m => m.id === modelId);
-    if (modelToDuplicate) {
-      try {
-        const newModel = await createModel({
-          name: `${modelToDuplicate.name} (Copy)`,
-          description: modelToDuplicate.description,
-          nodes: modelToDuplicate.nodes,
-          connections: modelToDuplicate.connections
-        });
+  const handleDuplicateModel = async (model: AIModel) => {
+    if (isOperating) return;
+    
+    try {
+      setIsOperating(true);
+      setShowActions(null);
+      
+      const newModel = await createModel({
+        name: `${model.name} (Copy)`,
+        description: model.description,
+        templateId: model.templateId,
+        nodes: model.nodes,
+        connections: model.connections,
+      });
 
-        // Refresh the models list
-        loadModels();
-      } catch (error) {
-        console.error("Error duplicating model:", error);
+      if (newModel?.id) {
+        // Navigate to the duplicated model
+        launchAIBuilder(newModel.id);
       }
+    } catch (error) {
+      console.error('Failed to duplicate model:', error);
+      // Add a toast notification for the error
+    } finally {
+      setIsOperating(false);
     }
+  };
+  
+  const handleDeleteModel = (model: AIModel) => {
+    setSelectedModel(model);
+    setShowDeleteModal(true);
     setShowActions(null);
   };
   
-  const handleDeleteModel = async (modelId: string) => {
-    if (confirm("Are you sure you want to delete this AI model?")) {
-      try {
-        await deleteModel(modelId);
-        // Refresh the models list
-        loadModels();
-      } catch (error) {
-        console.error("Error deleting model:", error);
-      }
+  const confirmDelete = async (modelName: string) => {
+    if (!selectedModel || modelName !== selectedModel.name) return;
+    
+    try {
+      setIsOperating(true);
+      await deleteModel(selectedModel.id);
+      setShowDeleteModal(false);
+      setSelectedModel(null);
+    } catch (error) {
+      console.error('Failed to delete model:', error);
+      // Add a toast notification for the error
+    } finally {
+      setIsOperating(false);
     }
-    setShowActions(null);
   };
   
-  const handleRunModel = (modelId: string) => {
-    // Logic to run model
-    console.log("Running model:", modelId);
-    setShowActions(null);
+  const toggleModelStatus = async (model: AIModel) => {
+    if (isOperating) return;
+    
+    try {
+      setIsOperating(true);
+      const newStatus = model.status === 'active' ? 'inactive' : 'active';
+      
+      await updateModel(model.id, { status: newStatus });
+      setShowActions(null);
+    } catch (error) {
+      console.error('Failed to update model status:', error);
+      // Add a toast notification for the error
+    } finally {
+      setIsOperating(false);
+    }
+  };
+  
+  const getStatusColor = (status?: string) => {
+    const colors = {
+      active: 'bg-green-100 text-green-800 border-green-200',
+      inactive: 'bg-gray-100 text-gray-800 border-gray-200',
+      draft: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    };
+    return colors[(status as keyof typeof colors) || 'draft'] || colors.draft;
+  };
+
+  const formatLastUsed = (lastUsed?: string | null) => {
+    if (!lastUsed) return 'Never';
+    try {
+      return new Date(lastUsed).toLocaleDateString();
+    } catch {
+      return lastUsed;
+    }
+  };
+
+  // Show loading state
+  if (isLoading && models.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error && models.length === 0) {
+    return (
+      <div className={`rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
+        <div className="p-12 text-center">
+          <p className={`text-sm ${theme === "dark" ? "text-red-400" : "text-red-600"} mb-4`}>
+            Error loading models: {error}
+          </p>
+          <button
+            onClick={() => loadModels()}
+            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle template selection
+  const handleTemplateSelect = async (template: any) => {
+    try {
+      setIsOperating(true);
+      const newModel = await createModel({
+        name: template.name || 'New Bot',
+        description: template.description,
+        templateId: template.id,
+        nodes: template.nodes || {},
+        connections: template.connections || [],
+      });
+      
+      if (newModel?.id) {
+        setShowTemplates(false);
+        launchAIBuilder(newModel.id);
+      }
+    } catch (error) {
+      console.error('Failed to create model from template:', error);
+      // Add a toast notification for the error
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  // Handle creating new model
+  const handleCreateModel = async (name: string, templateId?: string) => {
+    try {
+      setIsOperating(true);
+      const newModel = await createModel({
+        name: name,
+        description: '',
+        templateId: templateId,
+      });
+      
+      if (newModel?.id) {
+        setShowCreateModal(false);
+        launchAIBuilder(newModel.id);
+      }
+    } catch (error) {
+      console.error('Failed to create model:', error);
+      // Add a toast notification for the error
+    } finally {
+      setIsOperating(false);
+    }
   };
 
   return (
-    <div className={`p-6 rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-          Your AI Models
-        </h2>
-        <button
-          onClick={handleCreateNew}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center ${
-            theme === "dark"
-              ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-              : "bg-indigo-500 hover:bg-indigo-600 text-white"
-          }`}
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Create New
-        </button>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className={`rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
+        <div className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className={`text-xl font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                AI Models & Bots
+              </h2>
+              <p className={`text-sm mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                Create, manage, and deploy your AI assistants
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setShowTemplates(true)}
+                disabled={isOperating}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  theme === "dark" 
+                    ? "bg-[#1e1e2d] text-gray-300 hover:bg-[#252536]" 
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Zap className="h-4 w-4" />
+                Templates
+              </button>
+              
+              <button
+                onClick={handleCreateNew}
+                disabled={isOperating}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" />
+                Create New Bot
+              </button>
+            </div>
+          </div>
+          
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-4 mt-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search bots..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full pl-10 pr-4 py-2 rounded-lg ${
+                  theme === "dark"
+                    ? "bg-[#1e1e2d] border-[#2a2a3c] text-white"
+                    : "bg-gray-50 border-gray-200 text-gray-900"
+                } border focus:outline-none focus:ring-2 focus:ring-purple-500`}
+              />
+            </div>
+            
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className={`px-4 py-2 rounded-lg ${
+                theme === "dark"
+                  ? "bg-[#1e1e2d] border-[#2a2a3c] text-white"
+                  : "bg-gray-50 border-gray-200 text-gray-900"
+              } border focus:outline-none focus:ring-2 focus:ring-purple-500`}
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="draft">Draft</option>
+            </select>
+          </div>
+        </div>
       </div>
       
-      {models.length === 0 ? (
-        <div className={`text-center py-12 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-          <Zap className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p className="text-lg font-medium mb-2">No AI models yet</p>
-          <p className="mb-4">Create your first AI model to get started</p>
-          <button
-            onClick={handleCreateNew}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
-              theme === "dark"
-                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                : "bg-indigo-500 hover:bg-indigo-600 text-white"
-            }`}
-          >
-            <Plus className="h-4 w-4 inline mr-1.5" />
-            Create New AI Model
-          </button>
+      {/* Models Grid */}
+      {filteredModels.length === 0 && !searchTerm ? (
+        <div className={`rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
+          <div className="p-12 text-center">
+            <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 opacity-20"></div>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+              No bots yet
+            </h3>
+            <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"} mb-6`}>
+              Get started by creating your first AI assistant
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowTemplates(true)}
+                disabled={isOperating}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                  theme === "dark" 
+                    ? "bg-[#1e1e2d] text-gray-300 hover:bg-[#252536]" 
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Use Template
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleCreateNew}
+                disabled={isOperating}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create from Scratch
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>
-                <th className="text-left font-medium text-xs uppercase tracking-wider py-3 px-4">Name</th>
-                <th className="text-left font-medium text-xs uppercase tracking-wider py-3 px-4">Created</th>
-                <th className="text-left font-medium text-xs uppercase tracking-wider py-3 px-4">Last Used</th>
-                <th className="text-left font-medium text-xs uppercase tracking-wider py-3 px-4">Status</th>
-                <th className="text-right font-medium text-xs uppercase tracking-wider py-3 px-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {models.map((model) => (
-                <tr 
-                  key={model.id} 
-                  className={`group hover:${theme === "dark" ? "bg-gray-800/30" : "bg-gray-50"}`}
-                >
-                  <td className="py-4 px-4">
-                    <div className="flex items-center">
-                      <div className={`w-8 h-8 rounded-md flex items-center justify-center mr-3 ${
-                        theme === "dark" ? "bg-indigo-900" : "bg-indigo-100"
-                      }`}>
-                        <Zap className={`h-4 w-4 ${theme === "dark" ? "text-indigo-400" : "text-indigo-600"}`} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {filteredModels.map((model) => (
+              <motion.div
+                key={model.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+                className={`rounded-xl overflow-hidden ${
+                  theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"
+                } border shadow-sm hover:shadow-md transition-shadow`}
+              >
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                          {model.name}
+                        </h3>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(model.status)}`}>
+                          {model.status || 'draft'}
+                        </span>
                       </div>
-                      <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                        {model.name}
-                      </span>
+                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"} line-clamp-2`}>
+                        {model.description || 'No description'}
+                      </p>
                     </div>
-                  </td>
-                  <td className={`py-4 px-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {model.createdAt}
-                  </td>
-                  <td className={`py-4 px-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {model.lastUsed}
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      model.status === "active"
-                        ? theme === "dark" ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-800"
-                        : theme === "dark" ? "bg-yellow-900/30 text-yellow-400" : "bg-yellow-100 text-yellow-800"
-                    }`}>
-                      {model.status.charAt(0).toUpperCase() + model.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <div className="relative inline-block">
+                    
+                    <div className="relative">
                       <button
                         onClick={() => setShowActions(showActions === model.id ? null : model.id)}
-                        className={`p-2 rounded-md ${
-                          theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-200"
-                        }`}
+                        disabled={isOperating}
+                        className={`p-2 rounded-lg ${theme === "dark" ? "hover:bg-[#1e1e2d]" : "hover:bg-gray-100"} disabled:opacity-50`}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
                       
                       {showActions === model.id && (
-                        <div className={`absolute right-0 mt-1 w-48 rounded-md shadow-lg z-10 ${
-                          theme === "dark" ? "bg-[#1a1a2e] border border-gray-800" : "bg-white border border-gray-200"
-                        }`}>
-                          <div className="py-1">
-                            <button
-                              onClick={() => handleEditModel(model.id)}
-                              className={`w-full text-left px-4 py-2 text-sm ${
-                                theme === "dark" ? "hover:bg-gray-800 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-                              } flex items-center`}
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleRunModel(model.id)}
-                              className={`w-full text-left px-4 py-2 text-sm ${
-                                theme === "dark" ? "hover:bg-gray-800 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-                              } flex items-center`}
-                            >
-                              <Play className="h-4 w-4 mr-2" />
-                              Run
-                            </button>
-                            <button
-                              onClick={() => handleDuplicateModel(model.id)}
-                              className={`w-full text-left px-4 py-2 text-sm ${
-                                theme === "dark" ? "hover:bg-gray-800 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-                              } flex items-center`}
-                            >
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicate
-                            </button>
-                            <button
-                              onClick={() => handleDeleteModel(model.id)}
-                              className={`w-full text-left px-4 py-2 text-sm ${
-                                theme === "dark" ? "hover:bg-red-900 text-red-300" : "hover:bg-red-50 text-red-600"
-                              } flex items-center`}
-                            >
-                              <Trash className="h-4 w-4 mr-2" />
-                              Delete
-                            </button>
-                          </div>
+                        <div className={`absolute right-0 mt-1 w-48 rounded-lg shadow-lg z-10 ${
+                          theme === "dark" ? "bg-[#1a1a2e] border-[#2a2a3c]" : "bg-white border-gray-200"
+                        } border overflow-hidden`}>
+                          <button
+                            onClick={() => handleEditModel(model.id)}
+                            disabled={isOperating}
+                            className={`w-full px-4 py-2 text-left text-sm ${
+                              theme === "dark" ? "hover:bg-[#252536] text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                            } flex items-center gap-2 disabled:opacity-50`}
+                          >
+                            <Edit className="h-4 w-4" />
+                            Edit Bot
+                          </button>
+                          
+                          <button
+                            onClick={() => toggleModelStatus(model)}
+                            disabled={isOperating}
+                            className={`w-full px-4 py-2 text-left text-sm ${
+                              theme === "dark" ? "hover:bg-[#252536] text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                            } flex items-center gap-2 disabled:opacity-50`}
+                          >
+                            {model.status === 'active' ? (
+                              <>
+                                <Pause className="h-4 w-4" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4" />
+                                Activate
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDuplicateModel(model)}
+                            disabled={isOperating}
+                            className={`w-full px-4 py-2 text-left text-sm ${
+                              theme === "dark" ? "hover:bg-[#252536] text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                            } flex items-center gap-2 disabled:opacity-50`}
+                          >
+                            <Copy className="h-4 w-4" />
+                            Duplicate
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteModel(model)}
+                            disabled={isOperating}
+                            className={`w-full px-4 py-2 text-left text-sm ${
+                              theme === "dark" ? "hover:bg-red-900/20 text-red-400" : "hover:bg-red-50 text-red-600"
+                            } flex items-center gap-2 disabled:opacity-50`}
+                          >
+                            <Trash className="h-4 w-4" />
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-700">
+                    <div>
+                      <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                        Conversations
+                      </p>
+                      <p className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                        {(model.conversations || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                        Satisfaction
+                      </p>
+                      <p className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                        {(model.satisfaction && model.satisfaction > 0) ? `${model.satisfaction}%` : '-'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className={`text-xs mt-3 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                    Last used: {formatLastUsed(model.lastUsed)}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
       
-      {/* Create AI Model Modal */}
+      {/* Empty State for Search */}
+      {filteredModels.length === 0 && searchTerm && (
+        <div className={`rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
+          <div className="p-12 text-center">
+            <Search className={`h-8 w-8 mx-auto mb-3 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
+            <h3 className={`text-lg font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+              No results found
+            </h3>
+            <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+              Try adjusting your search or filter criteria
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Modals */}
       {showCreateModal && (
         <CreateAIModelModal
           theme={theme}
           onClose={() => setShowCreateModal(false)}
-          onCreateModel={(name, templateId) => {
-            console.log("Creating model:", name, "with template:", templateId);
-            setShowCreateModal(false);
-            launchAIBuilder(); // Launch the builder after model creation
-          }}
+          onCreateModel={handleCreateModel}
         />
+      )}
+
+      {showDeleteModal && selectedModel && (
+        <DeleteBotModal
+          theme={theme}
+          botName={selectedModel.name}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedModel(null);
+          }}
+          onConfirm={confirmDelete}
+        />
+      )}
+
+      {showTemplates && (
+        <TemplateGallery
+          theme={theme}
+          onSelectTemplate={handleTemplateSelect}
+          onClose={() => setShowTemplates(false)}
+        />
+      )}
+      
+      {/* Loading overlay */}
+      {isOperating && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        </div>
       )}
     </div>
   );

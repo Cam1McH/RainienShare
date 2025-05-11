@@ -10,7 +10,7 @@ import MobileMenu from "./components/layout/MobileMenu";
 
 // UI Components
 import SearchModal from "./components/ui/SearchModal";
-import  AIBuilder  from "./components/AIBuilder";
+import  AIBuilder  from "./components/AIBuilder/AIBuilder";
 
 // Page Components
 import WelcomeSection from "./components/home/WelcomeSection";

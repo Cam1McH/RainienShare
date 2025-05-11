@@ -1,10 +1,11 @@
+// src/app/api/aimodels/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getModelWithData, updateModel, deleteModel } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get user from session
@@ -13,6 +14,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const modelId = params.id;
     
     // Get model from database
@@ -30,10 +33,10 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('Received PUT request for model:', params.id); // Add logging
+    console.log('Received PUT request for model'); // Add logging
 
     // Get user from session
     const user = await getServerUser();
@@ -42,14 +45,16 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const modelId = params.id;
     
     // Parse request body
     const data = await req.json();
     console.log('Request data:', data); // Log request data
     
-    if (!data.name) {
-      return NextResponse.json({ error: 'Model name is required' }, { status: 400 });
+    if (!data.name && !data.description && !data.status && !data.nodes && !data.connections) {
+      return NextResponse.json({ error: 'No valid update data provided' }, { status: 400 });
     }
     
     // Update the model
@@ -70,7 +75,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get user from session
@@ -79,6 +84,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const modelId = params.id;
     
     // Delete the model

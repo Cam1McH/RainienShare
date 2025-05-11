@@ -1,10 +1,11 @@
+// src/app/api/aimodels/[id]/nodes/[nodeId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { updateNode } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string; nodeId: string } }
+  context: { params: Promise<{ id: string; nodeId: string }> }
 ) {
   try {
     // Get user from session
@@ -13,6 +14,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
+    // Await params before accessing
+    const params = await context.params;
     const { id: modelId, nodeId } = params;
     
     // Parse request body
