@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createModel, getUserModels } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
-import { db } from '@/lib/db';
-import { v4 as uuidv4 } from 'uuid';
 
-// Get all models for the current user
 export async function GET(req: NextRequest) {
   try {
     // Get user from session
@@ -12,13 +10,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Get models from the database
-    const [models] = await db.query(
-      "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM ai_models WHERE user_id = ? AND is_active = TRUE ORDER BY updated_at DESC",
-      [user.id]
-    ) as [any[], any];
+    // Get pagination parameters from query
+    const url = new URL(req.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const pageSize = parseInt(url.searchParams.get('pageSize') || '20');
     
-    return NextResponse.json({ models });
+    // Get models from the database
+    const result = await getUserModels(user.id, page, pageSize);
+    
+    return NextResponse.json({ 
+      models: result.models,
+      pagination: {
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages
+      }
+    });
   } catch (error) {
     console.error('Error fetching AI models:', error);
     return NextResponse.json(
@@ -28,7 +36,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Create a new model
 export async function POST(req: NextRequest) {
   try {
     // Get user from session
@@ -38,30 +45,18 @@ export async function POST(req: NextRequest) {
     }
     
     // Parse request body
-    const { name, description, nodes, connections } = await req.json();
+    const data = await req.json();
     
-    if (!name) {
+    if (!data.name) {
       return NextResponse.json({ error: 'Model name is required' }, { status: 400 });
     }
     
-    // Generate a new ID
-    const modelId = uuidv4();
-    
-    // Save the model to the database
-    await db.query(
-      "INSERT INTO ai_models (id, user_id, name, description, model_data) VALUES (?, ?, ?, ?, ?)",
-      [
-        modelId,
-        user.id,
-        name,
-        description || '',
-        JSON.stringify({ nodes, connections })
-      ]
-    );
+    // Create the model
+    const model = await createModel(data, user.id);
     
     return NextResponse.json({ 
       success: true, 
-      modelId,
+      modelId: model.id,
       message: 'Model saved successfully' 
     });
   } catch (error) {

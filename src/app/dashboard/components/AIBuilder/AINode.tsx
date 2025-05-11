@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AINodeType, AINodeData } from './types';
-import { X, Settings } from 'lucide-react';
+import { X, Settings, Circle } from 'lucide-react';
 
 interface AINodeProps {
   id: string;
@@ -16,86 +16,7 @@ interface AINodeProps {
   onStartConnection: (sourceId: string) => void;
   onEndConnection: (targetId: string) => void;
   setIsDragging: (isDragging: boolean) => void;
-}
-
-function renderNodeContent(type: AINodeType, data: any, theme: "dark" | "light") {
-  switch (type) {
-    case 'input':
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            {data?.inputType === 'text' ? 'Text Input' :
-             data?.inputType === 'file' ? 'File Upload' :
-             data?.inputType === 'knowledge_base' ? 'Knowledge Base' :
-             data?.inputType === 'form' ? 'Form Input' : 'Input'}
-          </div>
-          <div className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            {data?.description || 'Receives data from users or external sources'}
-          </div>
-        </div>
-      );
-    case 'process':
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            {data?.operation === 'answer' ? 'Answer Generator' :
-             data?.operation === 'analyze' ? 'Data Analyzer' :
-             data?.operation === 'create' ? 'Content Creator' :
-             data?.operation === 'first_message' ? 'First Message' : 'Process'}
-          </div>
-          <div className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            {data?.description || 'Transforms or processes data'}
-          </div>
-        </div>
-      );
-    case 'output':
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            {data?.outputType === 'text' ? 'Text Response' :
-             data?.outputType === 'quick_replies' ? 'Quick Replies' :
-             data?.outputType === 'image' ? 'Image Generator' :
-             data?.outputType === 'action' ? 'Action Button' : 'Output'}
-          </div>
-          <div className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            {data?.description || 'Sends data to users or external systems'}
-          </div>
-        </div>
-      );
-    case 'condition':
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            {data?.condition === 'branch' ? 'Decision Point' :
-             data?.condition === 'if_else' ? 'If/Else' : 'Condition'}
-          </div>
-          <div className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            {data?.description || 'Executes conditional logic'}
-          </div>
-        </div>
-      );
-    case 'data':
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            {data?.dataType === 'customer' ? 'Customer Data' :
-             data?.dataType === 'products' ? 'Product Catalog' :
-             data?.dataType === 'variable' ? 'Variable Storage' : 'Data'}
-          </div>
-          <div className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            {data?.description || 'Stores or retrieves data'}
-          </div>
-        </div>
-      );
-    default:
-      return (
-        <div className="p-3">
-          <div className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-            Unknown Node
-          </div>
-        </div>
-      );
-  }
+  onConnectionDrag?: (sourceId: string, mousePos: { x: number; y: number }) => void;
 }
 
 function AINode({
@@ -109,19 +30,73 @@ function AINode({
   onDelete,
   onStartConnection,
   onEndConnection,
-  setIsDragging
+  setIsDragging,
+  onConnectionDrag
 }: AINodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
+  const [isDraggingConnection, setIsDraggingConnection] = useState(false);
   const [startMousePosition, setStartMousePosition] = useState({ x: 0, y: 0 });
   const [startNodePosition, setStartNodePosition] = useState({ x: 0, y: 0 });
+  const [dragDelay, setDragDelay] = useState(0);
+  const [timerId, setTimerId] = useState<number | null>(null);
   
-  // Node dragging logic
+  // Fixed node dimensions
+  const NODE_WIDTH = 240;
+  const NODE_HEIGHT = 100;
+  
+  // Get node styles based on type
+  const getNodeStyles = () => {
+    const styles = {
+      input: {
+        border: '#3b82f6',
+        bg: theme === 'dark' ? '#0f172a' : '#dbeafe',
+        accent: '#3b82f6',
+        accentText: 'text-blue-600'
+      },
+      process: {
+        border: '#10b981',
+        bg: theme === 'dark' ? '#0f1e16' : '#d1fae5',
+        accent: '#10b981',
+        accentText: 'text-green-600'
+      },
+      output: {
+        border: '#8b5cf6',
+        bg: theme === 'dark' ? '#1c0f2e' : '#ede9fe',
+        accent: '#8b5cf6',
+        accentText: 'text-purple-600'
+      },
+      condition: {
+        border: '#f59e0b',
+        bg: theme === 'dark' ? '#291f0f' : '#fef3c7',
+        accent: '#f59e0b',
+        accentText: 'text-orange-600'
+      },
+      data: {
+        border: '#f97316',
+        bg: theme === 'dark' ? '#291a0f' : '#fff7ed',
+        accent: '#f97316',
+        accentText: 'text-orange-600'
+      }
+    };
+    
+    return styles[node.type] || styles.process;
+  };
+  
+  const nodeStyles = getNodeStyles();
+  
+  // Node dragging logic with delay for settings
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.node-action')) return;
+    // Don't start drag on buttons or connection ports
+    if ((e.target as HTMLElement).closest('.node-action') || 
+        (e.target as HTMLElement).closest('.connection-port')) return;
     
     e.stopPropagation();
-    onSelect();
+    
+    // Add a delay before showing settings
+    const delayTimer = setTimeout(() => {
+      onSelect();
+    }, 200); // 200ms delay
     
     setIsDraggingNode(true);
     setIsDragging(true);
@@ -131,6 +106,9 @@ function AINode({
   
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDraggingNode) return;
+    
+    // Clear the delay timer if we start dragging
+    clearTimeout(dragDelay);
     
     const dx = (e.clientX - startMousePosition.x) / canvasScale;
     const dy = (e.clientY - startMousePosition.y) / canvasScale;
@@ -142,127 +120,181 @@ function AINode({
     if (isDraggingNode) {
       setIsDraggingNode(false);
       setIsDragging(false);
+      clearTimeout(dragDelay);
     }
   };
   
-  // Effect for global mouse events
+  // Connection dragging from node
+  const handleConnectionMouseDown = (e: React.MouseEvent, isOutput: boolean) => {
+    e.stopPropagation();
+    setIsDraggingConnection(true);
+    
+    if (isOutput) {
+      onStartConnection(id);
+    }
+    
+    // Track mouse for connection line
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (onConnectionDrag) {
+        onConnectionDrag(id, { x: moveEvent.clientX, y: moveEvent.clientY });
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingConnection(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+  
+  // Global mouse events
   useEffect(() => {
     if (isDraggingNode) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-    } else {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
     }
     
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      clearTimeout(dragDelay);
     };
-  }, [isDraggingNode]);
+  }, [isDraggingNode, startMousePosition, startNodePosition, canvasScale]);
   
-  // Node styles based on type
-  const getNodeStyles = () => {
-    let borderColor, gradient, shadowColor;
-    
-    switch (node.type) {
-      case 'input':
-        borderColor = theme === 'dark' ? '#4273fa' : '#3b82f6';
-        gradient = theme === 'dark' ? 'from-blue-900/20 to-blue-600/5' : 'from-blue-100 to-blue-50';
-        shadowColor = 'shadow-blue-500/10';
-        break;
-      case 'process':
-        borderColor = theme === 'dark' ? '#10b981' : '#10b981';
-        gradient = theme === 'dark' ? 'from-green-900/20 to-green-600/5' : 'from-green-100 to-green-50';
-        shadowColor = 'shadow-green-500/10';
-        break;
-      case 'output':
-        borderColor = theme === 'dark' ? '#8b5cf6' : '#8b5cf6';
-        gradient = theme === 'dark' ? 'from-purple-900/20 to-purple-600/5' : 'from-purple-100 to-purple-50';
-        shadowColor = 'shadow-purple-500/10';
-        break;
-      case 'condition':
-        borderColor = theme === 'dark' ? '#f59e0b' : '#f59e0b';
-        gradient = theme === 'dark' ? 'from-yellow-900/20 to-yellow-600/5' : 'from-yellow-100 to-yellow-50';
-        shadowColor = 'shadow-yellow-500/10';
-        break;
-      case 'data':
-        borderColor = theme === 'dark' ? '#f97316' : '#f97316';
-        gradient = theme === 'dark' ? 'from-orange-900/20 to-orange-600/5' : 'from-orange-100 to-orange-50';
-        shadowColor = 'shadow-orange-500/10';
-        break;
-      default:
-        borderColor = theme === 'dark' ? '#6b7280' : '#6b7280';
-        gradient = theme === 'dark' ? 'from-gray-900/20 to-gray-600/5' : 'from-gray-100 to-gray-50';
-        shadowColor = 'shadow-gray-500/10';
-    }
-    
-    return { borderColor, gradient, shadowColor };
-  };
-  
-  const nodeStyles = getNodeStyles();
-  
+  useEffect(() => {
+    return () => {
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [timerId]);
+
   return (
     <div
       ref={nodeRef}
-      className={`ai-node absolute cursor-move rounded-xl ${theme === "dark" ? "bg-[#13131f]" : "bg-white"} border shadow-md ${isSelected ? 'ring-2 ring-blue-500' : ''} ${nodeStyles.shadowColor}`}
+      className={`ai-node absolute select-none ${isSelected ? 'z-50' : 'z-10'}`}
       style={{
         left: node.x,
         top: node.y,
-        width: '220px',
-        borderColor: nodeStyles.borderColor,
-        zIndex: isSelected ? 10 : 1
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Node header */}
-      <div className={`flex items-center justify-between p-2 border-b ${theme === "dark" ? "border-[#2a2a3c]" : "border-gray-200"} bg-gradient-to-r ${nodeStyles.gradient} rounded-t-xl`}>
-        <div className={`font-medium truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{node.title}</div>
-        <div className="flex items-center space-x-1">
-          <button 
-            className={`node-action p-1 rounded-sm ${theme === "dark" ? "hover:bg-[#252536] text-gray-300" : "hover:bg-gray-100 text-gray-700"}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-          >
-            <Settings className="h-3 w-3" />
-          </button>
+      {/* Node container */}
+      <div
+        className={`relative rounded-lg overflow-hidden shadow-lg transition-all duration-200 h-full ${
+          isSelected ? 'ring-2 ring-blue-500 ring-opacity-60' : ''
+        }`}
+        style={{
+          backgroundColor: theme === 'dark' ? '#13131f' : '#ffffff',
+          borderColor: nodeStyles.border,
+          borderWidth: '2px',
+          borderStyle: 'solid'
+        }}
+      >
+        {/* Header */}
+        <div 
+          className="px-4 py-3 flex items-center justify-between"
+          style={{
+            backgroundColor: nodeStyles.bg,
+            borderBottomColor: nodeStyles.border,
+            borderBottomWidth: '1px'
+          }}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h3 className={`font-medium text-sm truncate ${
+              theme === 'dark' ? 'text-white' : 'text-gray-900'
+            }`}>
+              {node.title}
+            </h3>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${nodeStyles.accentText} bg-opacity-10`}
+                  style={{ backgroundColor: `${nodeStyles.accent}15` }}>
+              {node.type}
+            </span>
+          </div>
           
-          <button 
-            className={`node-action p-1 rounded-sm ${theme === "dark" ? "hover:bg-[#252536] text-gray-300" : "hover:bg-gray-100 text-gray-700"}`}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button 
+              className="node-action p-1.5 rounded hover:bg-black/10 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect();
+              }}
+            >
+              <Settings className="h-3 w-3" style={{ color: nodeStyles.accent }} />
+            </button>
+            
+            <button 
+              className="node-action p-1.5 rounded hover:bg-black/10 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <X className="h-3 w-3" style={{ color: nodeStyles.accent }} />
+            </button>
+          </div>
+        </div>
+        
+        {/* Content */}
+        <div className={`p-4 h-[calc(100%-48px)] ${theme === 'dark' ? 'bg-[#13131f]' : 'bg-white'}`}>
+          <p className={`text-sm line-clamp-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+            {node.data?.description || 'No description provided'}
+          </p>
+        </div>
+        
+        {/* Connection ports */}
+        <div 
+          className="absolute left-0 top-1/2 transform -translate-y-1/2"
+          style={{ marginLeft: '-12px' }}
+        >
+          <div
+            className="connection-port h-6 w-6 rounded-full border-2 cursor-pointer hover:scale-110 transition-transform"
+            style={{
+              backgroundColor: theme === 'dark' ? '#13131f' : 'white',
+              borderColor: nodeStyles.border
+            }}
+            onMouseDown={(e) => handleConnectionMouseDown(e, false)}
             onClick={(e) => {
               e.stopPropagation();
-              onDelete();
+              setTimerId(setTimeout(() => {
+              onEndConnection(id);
+              }, 200) as unknown as number);
             }}
           >
-            <X className="h-3 w-3" />
-          </button>
+            <div 
+              className="h-2 w-2 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+              style={{ backgroundColor: nodeStyles.border }}
+            />
+          </div>
         </div>
-      </div>
-      
-      {/* Node content */}
-      {renderNodeContent(node.type, node.data, theme)}
-      
-      {/* Connection points */}
-      <div className="absolute -left-3 top-1/2 transform -translate-y-1/2 h-6 w-6">
+        
         <div 
-          className={`absolute h-3 w-3 rounded-full left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-125 transition-transform border ${theme === "dark" ? "bg-blue-600 border-blue-400" : "bg-blue-500 border-blue-300"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEndConnection(id);
-          }}
-        />
-      </div>
-      
-      <div className="absolute -right-3 top-1/2 transform -translate-y-1/2 h-6 w-6">
-        <div 
-          className={`absolute h-3 w-3 rounded-full left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-125 transition-transform border ${theme === "dark" ? "bg-blue-600 border-blue-400" : "bg-blue-500 border-blue-300"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onStartConnection(id);
-          }}
-        />
+          className="absolute right-0 top-1/2 transform -translate-y-1/2"
+          style={{ marginRight: '-12px' }}
+        >
+          <div
+            className="connection-port h-6 w-6 rounded-full border-2 cursor-pointer hover:scale-110 transition-transform"
+            style={{
+              backgroundColor: theme === 'dark' ? '#13131f' : 'white',
+              borderColor: nodeStyles.border
+            }}
+            onMouseDown={(e) => handleConnectionMouseDown(e, true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartConnection(id);
+            }}
+          >
+            <div 
+              className="h-2 w-2 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+              style={{ backgroundColor: nodeStyles.border }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

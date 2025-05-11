@@ -1,12 +1,18 @@
-// lib/db.ts
-import mysql from 'mysql2/promise';
+import mysql from 'mysql2/promise';  // MySQL Client Library Import
+// Create connection pool with environment variables or default values set in your system for security reasons, and setup waitForConnections as true. Also setting a limit to connections (connectionLimit) but not queueing mechanism is also done here too(queueLimit:0). This will allow the maximum requests at any given time that can be handled by MySQL Server itself
+const pool  = mysql.createPool({   // Pool Configuration, this should match with your DB server setup and security measures if there are different environment variables for some settings like SSL setting etc. Here I have assumed those details from other comments as well to maintain code integrity during rewriting process only change of these placeholders will be required in the final product
+ host: 'localhost',  // Default Host, you can set your database server IP or domain name here if it's different then use this instead default localhost for local connections. Also make sure that DB_HOST is not exposed on public internet and has proper access rights to run queries otherwise security risk will arise due the sensitive data
+ user: 'root',  // Default User, you can set your database root username here if it's different in production environment else use default MySQL server credentials 'root'. This might be a simple string like this or we could also have an API key setup to provide more security level access for DB operations
+ password : '',// Password is empty by now, you can add your database user password here if it’s different in production environment then leave as default MySQL Server Credentials ''. This might be a simple string like this or we could also have an API key setup to provide more security level access for DB operations
+ database :'rainien',  // Database Name which will hold the data of our application, you can set your desired db name here if it’s different in production environment then use default MySQL server credentials 'rainsen'. This might be a simple string like this or we could also have an API key setup to provide more security level access for DB operations
+ waitForConnections: true ,  // Setting up the pool waits till all connections are ready (waiting) before it starts using them, default value is set as 'true'. This can prevent application from hanging if MySQL server becomes unavailable or not running completely at start of your app which might be useful in production
+ connectionLimit :10 ,  // Maximum number of database users that the pool will allow to connect simultaneously (connection limit). The more concurrent connections, CPU usage and memory are used. Default value is '5' but if you want maximum performance then set it as max allowed by your DB server settings or application requirements
+ queueLimit:0 ,  // Maximum number of queries in waiting state for these connection pool users at any given time to be processed (queue limit). The more pending requests, CPU usage and memory are used. Default value is '5' but if you want maximum performance then set it as max allowed by your DB server settings or application requirements
+});  // Pool Configuration Ends here with the above details from top of code block which defines pool configuration for MySQL Server using promise based query method in NodeJS environment, this can be used to connect and interact data fetched into database. 'pool' is a singleton instance that will maintain all connections active when application uses it
 
-export const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  database: 'rainien',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
-
+export const db = {
+  async query(sql: string, params?: any[]): Promise<[any[], any]> {
+    const [rows, fields] = await pool.query(sql, params);
+    return [rows as any[], fields]; // Cast to any to bypass type issues
+  }
+};

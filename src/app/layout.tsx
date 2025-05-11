@@ -4,6 +4,7 @@
 import "./globals.css";
 import { UserProvider } from "@/providers/UserProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { AIBuilderProvider } from "./dashboard/contexts/AIBuilderContext";
 import ProtectedLayout from "../components/ProtectedLayout";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -12,9 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <UserProvider>
-            <ProtectedLayout>
-              {children}
-            </ProtectedLayout>
+            <AIBuilderProvider>
+              <ProtectedLayout>
+                {children}
+              </ProtectedLayout>
+            </AIBuilderProvider>
           </UserProvider>
         </AuthProvider>
       </body>

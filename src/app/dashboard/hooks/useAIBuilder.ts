@@ -2,6 +2,25 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
+import {
+  fetchAIModels,
+  fetchAIModel,
+  createAIModel,
+  updateAIModel,
+  deleteAIModel,
+  createNode,
+  updateNode,
+  deleteNodes,
+  createConnection,
+  deleteConnections,
+  fetchTemplates,
+  fetchKnowledgeBases,
+  createKnowledgeBase,
+  fetchKnowledgeBaseFiles,
+  uploadKnowledgeBaseFiles,
+  deleteKnowledgeBaseFiles
+} from '@/lib/api/aiBuilderClient';
+import { AIModel, AINodeData, AIConnectionData } from '@/lib/api/aiBuilderTypes';
 
 // Define types for our AI builder
 export type AINodeType = 
@@ -114,6 +133,11 @@ interface HistoryState {
 }
 
 export function useAIBuilder() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<AIModel[]>([]);
+  const [currentModel, setCurrentModel] = useState<AIModel | null>(null);
+
   const [history, setHistory] = useState<HistoryState>({
     past: [],
     present: {
@@ -136,35 +160,156 @@ export function useAIBuilder() {
     }));
   }, []);
 
+  // Fetch all models
+  const loadModels = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetchAIModels();
+      setModels(response.models);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load models');
+      console.error('Error loading models:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch a single model
+  const loadModel = useCallback(async (modelId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetchAIModel(modelId);
+      setCurrentModel(response.model);
+
+      // Update the UI state with the loaded model
+      if (response.model.nodes && response.model.connections) {
+    saveToHistory({
+          nodes: response.model.nodes,
+connections: response.model.connections.map(conn => ({
+  id: conn.id,
+  from: conn.sourceId,
+  fromPort: conn.sourcePort || 'output', // Use sourcePort if available, otherwise default to 'output'
+  to: conn.targetId,
+  toPort: conn.targetPort || 'input', // Use targetPort if available, otherwise default to 'input'
+}))
+    });
+      }
+
+      return response.model;
+    } catch (err: any) {
+      setError(err.message || 'Failed to load model');
+      console.error(`Error loading model ${modelId}:`, err);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [saveToHistory]);
+
+  // Create a new model
+  const saveNewModel = useCallback(async (modelData: {
+    name: string;
+    description?: string;
+    nodes?: Record<string, AINodeData>;
+    connections?: AIConnectionData[];
+  }) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await createAIModel(modelData);
+      return response.modelId;
+    } catch (err: any) {
+      setError(err.message || 'Failed to create model');
+      console.error('Error creating model:', err);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Update an existing model
+  const saveModel = useCallback(async (modelId: string, modelData: {
+    name?: string;
+    description?: string;
+    nodes?: Record<string, AINodeData>;
+    connections?: AIConnectionData[];
+  }) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await updateAIModel(modelId, modelData);
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to update model');
+      console.error(`Error updating model ${modelId}:`, err);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Delete a model
+  const removeModel = useCallback(async (modelId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await deleteAIModel(modelId);
+      setModels(prevModels => prevModels.filter(model => model.id !== modelId));
+      if (currentModel?.id === modelId) {
+        setCurrentModel(null);
+      }
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete model');
+      console.error(`Error deleting model ${modelId}:`, err);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentModel]);
+
   // Add a new node to the canvas
-  const addNode = useCallback((type: AINodeType, position: { x: number; y: number }) => {
+  const addNode = useCallback(async (type: AINodeType, position: { x: number; y: number }) => {
     const id = `${type}-${uuidv4().substring(0, 8)}`;
-    
+
     // Add a small random offset to position to avoid exact overlapping
     const adjustedPosition = {
       x: position.x + (Math.random() - 0.5) * 50,
       y: position.y + (Math.random() - 0.5) * 50
+  };
+
+    const newNode = {
+      type,
+      position: adjustedPosition,
+      data: {}, // Default empty data
+      ...defaultPorts[type] // Apply default ports
     };
-    
+
     const newNodes = {
       ...nodes,
-      [id]: {
-        type,
-        position: adjustedPosition,
-        data: {}, // Default empty data
-        ...defaultPorts[type] // Apply default ports
-      }
+      [id]: newNode
     };
+
+    if (currentModel?.id) {
+      try {
+        await createNode(currentModel.id, { id, type, title, data, x: position.x, y: position.y });
+      } catch (err: any) {
+        setError(err.message || 'Failed to create node on server');
+        console.error(`Error creating node for model ${currentModel.id}:`, err);
+}
+    }
+
     saveToHistory({
       nodes: newNodes,
       connections
     });
 
     return id;
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Move a node to a new position
-  const moveNode = useCallback((nodeId: string, position: { x: number; y: number }) => {
+  const moveNode = useCallback(async (nodeId: string, position: { x: number; y: number }) => {
     // Ensure the node exists
     if (!nodes[nodeId]) {
       console.warn(`Cannot move node ${nodeId}: node does not exist`);
@@ -185,15 +330,24 @@ export function useAIBuilder() {
       }
     };
 
+    if (currentModel?.id) {
+      try {
+        await updateNode(currentModel.id, nodeId, { position });
+      } catch (err: any) {
+        setError(err.message || 'Failed to update node position on server');
+        console.error(`Error updating node position for model ${currentModel.id}:`, err);
+      }
+    }
+
     // Save the new state
     saveToHistory({
       nodes: newNodes,
       connections
     });
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Connect two nodes together
-  const connectNodes = useCallback((fromNodeId: string, fromPortId: string, toNodeId: string, toPortId: string) => {
+  const connectNodes = useCallback(async (fromNodeId: string, fromPortId: string, toNodeId: string, toPortId: string) => {
     // Prevent connecting a node to itself
     if (fromNodeId === toNodeId) return;
 
@@ -247,15 +401,31 @@ export function useAIBuilder() {
       }
     };
 
+    if (currentModel?.id) {
+      try {
+await createConnection(currentModel.id, {
+  id: newConnection.id,
+  sourceId: newConnection.from,
+          targetId: newConnection.to
+});
+      } catch (err: any) {
+        setError(err.message || 'Failed to create connection on server');
+        console.error(`Error creating connection for model ${currentModel.id}:`, err);
+      }
+    }
+
     saveToHistory({
       nodes: newNodes,
       connections: [...connections, newConnection]
     });
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Remove a node
-  const removeNode = useCallback((id: string) => {
+  const removeNode = useCallback(async (id: string) => {
     // Filter out connections involving this node
+    const connectionsToRemove = connections.filter(
+      conn => conn.from === id || conn.to === id
+    );
     const newConnections = connections.filter(
       conn => conn.from !== id && conn.to !== id
     );
@@ -302,14 +472,26 @@ export function useAIBuilder() {
       }
     });
 
+    if (currentModel?.id) {
+      try {
+        await deleteNodes(currentModel.id, [id]);
+        if (connectionsToRemove.length > 0) {
+          await deleteConnections(currentModel.id, connectionsToRemove.map(conn => conn.id));
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete node on server');
+        console.error(`Error deleting node for model ${currentModel.id}:`, err);
+      }
+    }
+
     saveToHistory({
       nodes: nodesToUpdate,
       connections: newConnections
     });
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Remove a connection
-  const removeConnection = useCallback((id: string) => {
+  const removeConnection = useCallback(async (id: string) => {
     const connToRemove = connections.find(conn => conn.id === id);
     if (!connToRemove) return;
 
@@ -340,14 +522,23 @@ export function useAIBuilder() {
       }
     };
 
+    if (currentModel?.id) {
+      try {
+        await deleteConnections(currentModel.id, [id]);
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete connection on server');
+        console.error(`Error deleting connection for model ${currentModel.id}:`, err);
+      }
+    }
+
     saveToHistory({
       nodes: newNodes,
       connections: newConnections
     });
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Update node data
-  const updateNodeData = useCallback((nodeId: string, data: any) => {
+  const updateNodeData = useCallback(async (nodeId: string, data: any) => {
     if (!nodes[nodeId]) return;
 
     const newNodes = {
@@ -361,11 +552,20 @@ export function useAIBuilder() {
       }
     };
 
+    if (currentModel?.id) {
+      try {
+        await updateNode(currentModel.id, nodeId, { data });
+      } catch (err: any) {
+        setError(err.message || 'Failed to update node data on server');
+        console.error(`Error updating node data for model ${currentModel.id}:`, err);
+      }
+    }
+
     saveToHistory({
       nodes: newNodes,
       connections
     });
-  }, [nodes, connections, saveToHistory]);
+  }, [nodes, connections, saveToHistory, currentModel]);
 
   // Handle undo
   const undo = useCallback(() => {
@@ -389,30 +589,8 @@ export function useAIBuilder() {
     }));
   }, [history]);
 
-  // Save model to backend
-  const saveModel = useCallback(async (modelName: string = "My AI Model") => {
-    try {
-      const model = {
-        nodes,
-        connections,
-        name: modelName
-      };
-
-      // TODO: Replace with actual API call
-      console.log("Saving model:", model);
-
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      return { success: true };
-    } catch (error) {
-      console.error("Error saving model:", error);
-      return { success: false, error };
-    }
-  }, [nodes, connections]);
-
   // Load template
-  const loadTemplate = useCallback((templateId: string) => {
+  const loadTemplate = useCallback(async (templateId: string) => {
     const template = templates[templateId];
     if (!template) return;
 
@@ -420,24 +598,34 @@ export function useAIBuilder() {
       nodes: template.nodes,
       connections: template.connections
     });
-  }, [saveToHistory]);
 
+    // If we have a current model, also save the template to the server
+    if (currentModel?.id) {
+      try {
+        await updateAIModel(currentModel.id, {
+          nodes: template.nodes,
+          connections: template.connections
+        });
+      } catch (err: any) {
+        setError(err.message || 'Failed to save template to server');
+        console.error(`Error saving template for model ${currentModel.id}:`, err);
+      }
+    }
+  }, [saveToHistory, currentModel]);
+
+  // Add more functions for nodes, connections, knowledge bases, etc.
+  
   return {
-    nodes,
-    connections,
-    addNode,
-    moveNode,
-    connectNodes,
-    removeNode,
-    removeConnection,
-    updateNodeData,
-    history: {
-      canUndo: history.past.length > 0,
-      canRedo: history.future.length > 0
-    },
-    undo,
-    redo,
+    isLoading,
+    error,
+    models,
+    currentModel,
+    loadModels,
+    loadModel,
+    saveNewModel,
     saveModel,
-    loadTemplate
+    removeModel,
+    // Export other functions as needed
   };
 }
+

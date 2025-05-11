@@ -5,7 +5,8 @@ import { AINodeData, AIConnectionData } from './types';
 
 interface TemplateGalleryProps {
   theme: 'light' | 'dark';
-  onSelectTemplate: (template: { 
+  onSelectTemplate: (template: {
+    [x: string]: string | undefined; 
     name: string; 
     nodes: Record<string, AINodeData>; 
     connections: AIConnectionData[] 

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Sparkles, Users } from "lucide-react";
 
 // Layout components
 import Sidebar from "./components/layout/Sidebar";
@@ -11,15 +10,14 @@ import MobileMenu from "./components/layout/MobileMenu";
 
 // UI Components
 import SearchModal from "./components/ui/SearchModal";
-import { AIBuilder } from "./components/AIBuilder";
-import AIBuilderCanvas from "./components/AIBuilder/AIBuilderCanvas";
+import  AIBuilder  from "./components/AIBuilder";
 
 // Page Components
 import WelcomeSection from "./components/home/WelcomeSection";
 import StatsRow from "./components/home/StatsRow";
-import AIModelsSection from "./components/home/AIModelsSection";
 import RecentActivity from "./components/home/RecentActivity";
 import UpcomingEvents from "./components/home/UpcomingEvents";
+import AIModelsSection from "./components/home/AIModelsSection"; // Import the new AIModelsSection
 
 // Billing Components
 import BillingTabs from "./components/billing/BillingTabs";
@@ -43,6 +41,7 @@ const Dashboard: React.FC = () => {
   // State
   const [activeTab, setActiveTab] = useState("Home");
   const [showAIBuilder, setShowAIBuilder] = useState(false);
+  const [currentModelId, setCurrentModelId] = useState<string | undefined>(undefined);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -61,14 +60,15 @@ const Dashboard: React.FC = () => {
 
   const router = useRouter();
 
-  // Console logs for debugging (keep these for now)
+  // Console logs for debugging
   console.log('Dashboard Render - activeTab:', activeTab);
+  console.log('Dashboard Render - showAIBuilder:', showAIBuilder);
+  console.log('Dashboard Render - currentModelId:', currentModelId);
   console.log('Dashboard Render - user:', user);
   console.log('Dashboard Render - loading:', loading);
   console.log('Dashboard Render - user?.accountType:', user?.accountType);
   const showTeamTab = user !== null && user.accountType === 'business'; // Calculate showTeamTab
   console.log('Dashboard Render - showTeamTab:', showTeamTab);
-
 
   useEffect(() => {
     // Set visibility after initial load
@@ -77,22 +77,23 @@ const Dashboard: React.FC = () => {
 
   // useEffect to log user state changes
   useEffect(() => {
-      console.log('>>> useEffect [user] - User state updated:', user);
-      console.log('>>> useEffect [user] - showTeamTab (based on updated user):', user?.accountType === 'business');
+    console.log('>>> useEffect [user] - User state updated:', user);
+    console.log('>>> useEffect [user] - showTeamTab (based on updated user):', user?.accountType === 'business');
   }, [user]);
 
-
   // Function to launch AI Builder
-  const launchAIBuilder = () => {
-    console.log("Launching AI Builder");
+  const launchAIBuilder = (modelId?: string) => {
+    console.log("Launching AI Builder", modelId ? `for model: ${modelId}` : "for new model");
+    setCurrentModelId(modelId);
     setShowAIBuilder(true);
-    setActiveTab("AI Models");
+    setActiveTab("AI Models"); // Ensure we're on the AI Models tab
   };
 
   // Function to close AI Builder
   const closeAIBuilder = () => {
     console.log("Closing AI Builder");
     setShowAIBuilder(false);
+    setCurrentModelId(undefined);
   };
 
   // Billing functions
@@ -101,20 +102,105 @@ const Dashboard: React.FC = () => {
     setShowUpgradeModal(true);
   };
 
-
   // Handle loading and unauthenticated states BEFORE rendering main layout
-   if (loading) {
-       return (
-           <div className={`min-h-screen flex items-center justify-center ${theme === "dark" ? "bg-[#0a0a14]" : "bg-gray-50"}`}>
-               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-           </div>
-       );
-   }
-   if (!user && !loading) {
-       router.push('/login'); // Redirect if not authenticated after loading
-       return null;
-   }
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${theme === "dark" ? "bg-[#0a0a14]" : "bg-gray-50"}`}>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
+  if (!user && !loading) {
+    router.push('/login'); // Redirect if not authenticated after loading
+    return null;
+  }
 
+  // Determine what content to show based on state
+  const renderMainContent = () => {
+    // If AI Builder is active, show it regardless of activeTab
+    if (showAIBuilder) {
+      return (
+        <AIBuilder 
+          theme={theme} 
+          closeAIBuilder={closeAIBuilder}
+          modelId={currentModelId}
+        />
+      );
+    }
+
+    // Otherwise, show content based on activeTab
+    switch (activeTab) {
+      case "Home":
+        return (
+          <>
+            <WelcomeSection
+              theme={theme}
+              user={user}
+              launchAIBuilder={launchAIBuilder}
+            />
+            <StatsRow theme={theme} />
+            <AIModelsSection
+              theme={theme}
+              setActiveTab={setActiveTab}
+              launchAIBuilder={launchAIBuilder}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <RecentActivity theme={theme} />
+              <UpcomingEvents theme={theme} />
+            </div>
+          </>
+        );
+
+      case "AI Models":
+        return (
+          <AIModelsSection
+            theme={theme}
+            setActiveTab={setActiveTab}
+            launchAIBuilder={launchAIBuilder}
+          />
+        );
+
+      case "Billing":
+        return (
+          <>
+            <WelcomeSection
+              theme={theme}
+              user={user}
+              launchAIBuilder={launchAIBuilder}
+              isBillingPage={true}
+            />
+            <BillingTabs
+              theme={theme}
+              billingSubTab={billingSubTab}
+              setBillingSubTab={setBillingSubTab}
+              handleSelectPlan={handleSelectPlan}
+              setShowAddPaymentModal={setShowAddPaymentModal}
+            />
+          </>
+        );
+
+      case "Team":
+        if (showTeamTab) {
+          return (
+            <PlaceholderSection
+              activeTab={activeTab}
+              theme={theme}
+              launchAIBuilder={launchAIBuilder}
+            />
+          );
+        }
+        // Fall through to default if team tab shouldn't be shown
+
+      default:
+        return (
+          <PlaceholderSection
+            activeTab={activeTab}
+            theme={theme}
+            launchAIBuilder={launchAIBuilder}
+          />
+        );
+    }
+  };
 
   return (
     <div className={`min-h-screen ${theme === "dark" ? "bg-[#0a0a14]" : "bg-gray-50"}`}>
@@ -163,66 +249,11 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Page content */}
-        {/* Added a wrapper div for consistent padding and width */}
         <main className={`transition-opacity duration-500 ${isVisible ? "opacity-100" : "opacity-0"} max-w-[1600px] mx-auto space-y-6 p-4 sm:p-6`}>
-          {/* AI Builder Content */}
-          {showAIBuilder ? (
-            // Show the AI Builder Canvas when in AI Builder mode
-              <AIBuilder
-              theme={theme} 
-                closeAIBuilder={closeAIBuilder}
-            />
-          ) : activeTab === "Home" ? (
-             <> {/* Use fragment for multiple elements */}
-              <WelcomeSection
-                theme={theme}
-                user={user}
-                launchAIBuilder={launchAIBuilder}
-              />
-              <StatsRow theme={theme} />
-              <AIModelsSection
-              theme={theme}
-                setActiveTab={setActiveTab}
-              launchAIBuilder={launchAIBuilder}
-            />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RecentActivity theme={theme} />
-                <UpcomingEvents theme={theme} />
-      </div>
-            </>
-          ) : activeTab === "Billing" ? (
-            <>
-              <WelcomeSection
-          theme={theme}
-                user={user}
-                launchAIBuilder={launchAIBuilder}
-                isBillingPage={true}
-        />
-              <BillingTabs
-          theme={theme}
-                billingSubTab={billingSubTab}
-                setBillingSubTab={setBillingSubTab}
-                handleSelectPlan={handleSelectPlan}
-          setShowAddPaymentModal={setShowAddPaymentModal}
-        />
-            </>
-          ) : activeTab === "Team" && showTeamTab ? (
-            // Use PlaceholderSection for Team tab until TeamManagement is implemented
-            <PlaceholderSection
-              activeTab={activeTab}
-              theme={theme}
-              launchAIBuilder={launchAIBuilder}
-            />
-          ) : (
-            <PlaceholderSection
-              activeTab={activeTab}
-              theme={theme}
-              launchAIBuilder={launchAIBuilder}
-            />
-      )}
+          {renderMainContent()}
 
-          {/* Only show floating action button when AI Builder is not shown */}
-          {!showAIBuilder && (
+          {/* Only show floating action button when AI Builder is not shown and we're not on AI Models tab */}
+          {!showAIBuilder && activeTab !== "AI Models" && (
             <FloatingActionButton
               launchAIBuilder={launchAIBuilder}
             />

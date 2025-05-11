@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getModelWithData, updateModel, deleteModel } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
-import { db } from '@/lib/db';
 
-// Get a specific model
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -17,26 +16,9 @@ export async function GET(
     const modelId = params.id;
     
     // Get model from database
-    const [models] = await db.query(
-      "SELECT id, name, description, model_data as modelData, created_at as createdAt, updated_at as updatedAt FROM ai_models WHERE id = ? AND (user_id = ? OR is_public = TRUE)",
-      [modelId, user.id]
-    ) as [any[], any];
+    const result = await getModelWithData(modelId, user.id);
     
-    if (models.length === 0) {
-      return NextResponse.json({ error: 'Model not found' }, { status: 404 });
-    }
-    
-    const model = models[0];
-    
-    // Parse the model data from JSON
-    try {
-      model.modelData = JSON.parse(model.modelData);
-    } catch (e) {
-      console.error('Error parsing model data:', e);
-      model.modelData = { nodes: {}, connections: [] };
-    }
-    
-    return NextResponse.json({ model });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching AI model:', error);
     return NextResponse.json(
@@ -46,7 +28,6 @@ export async function GET(
   }
 }
 
-// Update a model
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -60,33 +41,15 @@ export async function PUT(
     
     const modelId = params.id;
     
-    // Check if model belongs to user
-    const [models] = await db.query(
-      "SELECT id FROM ai_models WHERE id = ? AND user_id = ?",
-      [modelId, user.id]
-    ) as [any[], any];
-    
-    if (models.length === 0) {
-      return NextResponse.json({ error: 'Model not found or unauthorized' }, { status: 404 });
-    }
-    
     // Parse request body
-    const { name, description, nodes, connections } = await req.json();
+    const data = await req.json();
     
-    if (!name) {
+    if (!data.name) {
       return NextResponse.json({ error: 'Model name is required' }, { status: 400 });
     }
     
     // Update the model
-    await db.query(
-      "UPDATE ai_models SET name = ?, description = ?, model_data = ? WHERE id = ?",
-      [
-        name,
-        description || '',
-        JSON.stringify({ nodes, connections }),
-        modelId
-      ]
-    );
+    await updateModel(modelId, data, user.id);
     
     return NextResponse.json({ 
       success: true,
@@ -101,7 +64,6 @@ export async function PUT(
   }
 }
 
-// Delete a model
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -115,21 +77,8 @@ export async function DELETE(
     
     const modelId = params.id;
     
-    // Check if model belongs to user
-    const [models] = await db.query(
-      "SELECT id FROM ai_models WHERE id = ? AND user_id = ?",
-      [modelId, user.id]
-    ) as [any[], any];
-    
-    if (models.length === 0) {
-      return NextResponse.json({ error: 'Model not found or unauthorized' }, { status: 404 });
-    }
-    
-    // Soft delete the model
-    await db.query(
-      "UPDATE ai_models SET is_active = FALSE WHERE id = ?",
-      [modelId]
-    );
+    // Delete the model
+    await deleteModel(modelId, user.id);
     
     return NextResponse.json({ 
       success: true,
