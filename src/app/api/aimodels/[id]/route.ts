@@ -33,9 +33,12 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('Received PUT request for model:', params.id); // Add logging
+
     // Get user from session
     const user = await getServerUser();
     if (!user) {
+      console.log('User not authenticated');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
@@ -43,6 +46,7 @@ export async function PUT(
     
     // Parse request body
     const data = await req.json();
+    console.log('Request data:', data); // Log request data
     
     if (!data.name) {
       return NextResponse.json({ error: 'Model name is required' }, { status: 400 });
@@ -58,7 +62,7 @@ export async function PUT(
   } catch (error) {
     console.error('Error updating AI model:', error);
     return NextResponse.json(
-      { error: 'Failed to update model' },
+      { error: 'Failed to update model', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

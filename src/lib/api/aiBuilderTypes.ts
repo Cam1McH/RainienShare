@@ -23,6 +23,7 @@ export interface CreateModelRequest {
   type?: string;
   status?: string;
   template?: string;
+  templateId?: string;   // Add this line
   isPublic?: boolean;
   nodes?: Record<string, AINodeData>;
   connections?: AIConnectionData[];
@@ -70,31 +71,31 @@ export interface AINodeData {
 }
 
 export interface AIConnectionData {
-  sourcePort: string;
-  targetPort: string;
   id: string;
   sourceId: string;
   targetId: string;
+  // Add any fields AIModelsSection expects, like these:
+  sourcePort?: string;
+  targetPort?: string;
 }
 
-// Updated AIModel interface to fix the lastUsed type issue
 export interface AIModel {
   id: string;
+  userId: number;
   name: string;
-  description: string; // Changed from optional to required
+  description: string;
   status?: string;
   type?: string;
-  userId: number;
+  templateId?: string;  // Add this line to match what AIModelsSection expects
   nodes: Record<string, AINodeData>;
   connections: AIConnectionData[];
   canvasData?: any;
   createdAt: string;
   updatedAt: string;
   isPublic?: boolean;
-  // Fix the lastUsed type to allow null
   conversations?: number;
   satisfaction?: number;
-  lastUsed?: string | null; // Changed from string | undefined to string | null
+  lastUsed?: string | null;
 }
 
 export interface KnowledgeBase {

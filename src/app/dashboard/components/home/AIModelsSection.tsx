@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, Plus, Edit, Trash, MoreVertical, Copy, Play } from "lucide-react";
 import { Theme } from "../../types";
 import { motion } from "framer-motion";
 import CreateAIModelModal from "../modals/CreateAIModelModal";
+import { useAIBuilderContext } from "../../contexts/AIBuilderContext";
 
 interface AIModelsSectionProps {
   theme: Theme;
@@ -19,14 +20,31 @@ export default function AIModelsSection({
 }: AIModelsSectionProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showActions, setShowActions] = useState<string | null>(null);
+  const [loadAttempted, setLoadAttempted] = useState(false);
   
-  // Mock data - this would come from your API
-  const models = [
-    { id: "model1", name: "Customer Support Bot", createdAt: "2023-09-15", lastUsed: "2 days ago", status: "active" },
-    { id: "model2", name: "Content Generator", createdAt: "2023-08-22", lastUsed: "1 week ago", status: "active" },
-    { id: "model3", name: "Product Recommender", createdAt: "2023-07-10", lastUsed: "3 weeks ago", status: "draft" },
-  ];
-  
+  // Use the AIBuilderContext instead of mock data
+  const {
+    models,
+    loadModels,
+    isLoading,
+    deleteModel,
+    createModel
+  } = useAIBuilderContext();
+
+  // Load models on component mount
+  useEffect(() => {
+    // Add error handling to prevent continuous retries
+    if (!isLoading) {
+      loadModels().catch(error => {
+        console.error("Failed to load models:", error);
+        // Set a flag to prevent continuous retries
+        setLoadAttempted(true);
+      });
+    }
+
+    // Include loadModels and isLoading in the dependency array
+  }, [loadModels, isLoading]);
+
   const handleCreateNew = () => {
     setShowCreateModal(true);
   };
@@ -36,16 +54,36 @@ export default function AIModelsSection({
     setShowActions(null);
   };
   
-  const handleDuplicateModel = (modelId: string) => {
-    // Logic to duplicate model
-    console.log("Duplicating model:", modelId);
+  const handleDuplicateModel = async (modelId: string) => {
+    // Find the model to duplicate
+    const modelToDuplicate = models.find(m => m.id === modelId);
+    if (modelToDuplicate) {
+      try {
+        const newModel = await createModel({
+          name: `${modelToDuplicate.name} (Copy)`,
+          description: modelToDuplicate.description,
+          nodes: modelToDuplicate.nodes,
+          connections: modelToDuplicate.connections
+        });
+
+        // Refresh the models list
+        loadModels();
+      } catch (error) {
+        console.error("Error duplicating model:", error);
+      }
+    }
     setShowActions(null);
   };
   
-  const handleDeleteModel = (modelId: string) => {
-    // Logic to delete model
+  const handleDeleteModel = async (modelId: string) => {
     if (confirm("Are you sure you want to delete this AI model?")) {
-      console.log("Deleting model:", modelId);
+      try {
+        await deleteModel(modelId);
+        // Refresh the models list
+        loadModels();
+      } catch (error) {
+        console.error("Error deleting model:", error);
+      }
     }
     setShowActions(null);
   };

@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getKnowledgeBaseFiles, 
   uploadKnowledgeBaseFile, 
-  deleteKnowledgeBaseFiles 
+  deleteKnowledgeBaseFiles,
+  handleAIBuilderError
 } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
 
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get user from session
+    // Get user
     const user = await getServerUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -22,22 +23,21 @@ export async function GET(
     // Get files
     const files = await getKnowledgeBaseFiles(kbId);
     
-    return NextResponse.json({ files });
+    return NextResponse.json({ 
+      success: true, 
+      data: files
+    });
   } catch (error) {
-    console.error('Error fetching knowledge base files:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch files' },
-      { status: 500 }
-    );
+    return handleAIBuilderError(error);
   }
 }
 
 export async function POST(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get user from session
+    // Get user
     const user = await getServerUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -46,9 +46,9 @@ export async function POST(
     const kbId = params.id;
     
     // Handle file upload
-    const formData = await req.formData();
+    const formData = await request.formData();
     const files = formData.getAll('files');
-    
+
     if (files.length === 0) {
       return NextResponse.json({ error: 'No files uploaded' }, { status: 400 });
     }
@@ -62,53 +62,44 @@ export async function POST(
         return uploadKnowledgeBaseFile(kbId, file);
       })
     );
-    
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       results,
-      message: 'Files uploaded successfully' 
+      message: 'Files uploaded successfully'
     });
   } catch (error) {
-    console.error('Error uploading files:', error);
-    return NextResponse.json(
-      { error: 'Failed to upload files' },
-      { status: 500 }
-    );
+    return handleAIBuilderError(error);
   }
 }
 
 export async function DELETE(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get user from session
+    // Get user
     const user = await getServerUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const kbId = params.id;
-    
+
     // Parse request body
-    const { fileIds } = await req.json();
-    
+    const { fileIds } = await request.json();
+
     if (!Array.isArray(fileIds) || fileIds.length === 0) {
       return NextResponse.json({ error: 'File IDs are required' }, { status: 400 });
     }
-    
+
     // Delete the files
     await deleteKnowledgeBaseFiles(kbId, fileIds, user.id);
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       success: true,
-      message: 'Files deleted successfully' 
+      message: 'Files deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting files:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete files' },
-      { status: 500 }
-    );
+    return handleAIBuilderError(error);
   }
 }

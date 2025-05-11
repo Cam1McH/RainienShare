@@ -65,35 +65,7 @@ import {
   ];
   
   // AI model status cards
-  export const aiModels: AIModel[] = [
-    {
-      name: "CustomerGPT",
-      status: "Active",
-      type: "Assistant",
-      interactions: 4392,
-      satisfaction: 4,
-      lastActive: "2 min ago",
-      color: "from-purple-500 to-pink-500",
-    },
-    {
-      name: "AnalyticsBot",
-      status: "Active",
-      type: "Data Analysis",
-      interactions: 1283,
-      satisfaction: 88,
-      lastActive: "27 min ago",
-      color: "from-blue-500 to-cyan-500",
-    },
-    {
-      name: "SalesGPT",
-      status: "Inactive",
-      type: "Sales Assistant",
-      interactions: 729,
-      satisfaction: 76,
-      lastActive: "3 days ago",
-      color: "from-amber-400 to-orange-500",
-    },
-  ];
+
   
   // Team members - Placeholder data
   export const teamMembers = [

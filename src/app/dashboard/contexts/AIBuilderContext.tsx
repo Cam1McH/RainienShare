@@ -1,381 +1,517 @@
-// src/app/dashboard/contexts/AIBuilderContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { AIModel, AINodeData, AIConnectionData } from '@/lib/api/aiBuilderTypes';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  getModels,
+  getModel,
+  createModel as apiCreateModel,
+  updateModel as apiUpdateModel,
+  deleteModel as apiDeleteModel,
+  createNode,
+  updateNode,
+  deleteNodes,
+  createConnection,
+  deleteConnections,
+  getKnowledgeBases,
+  createKnowledgeBase,
+  getKnowledgeBaseFiles,
+  uploadKnowledgeBaseFiles,
+  deleteKnowledgeBaseFiles
+} from '@/lib/api/aiBuilderClient';
+import {
+  AIModel,
+  AINodeData,
+  AIConnectionData,
+  CreateNodeRequest,
+  CreateConnectionRequest,
+  KnowledgeBase,
+  CreateModelRequest,
+  UpdateModelRequest,
+  BotTemplate
+} from '@/lib/api/aiBuilderTypes';
+
+// Define a consistent return type for model creation
+export interface ModelCreateResult {
+    id: string;
+}
 
 interface AIBuilderContextType {
+  // Models
   models: AIModel[];
   currentModel: AIModel | null;
-  isLoading: boolean;
+  loadingModels: boolean;
+  loadingCurrentModel: boolean;
+
+  // Functions AIModelsSection.tsx is looking for
+  loadModels: () => Promise<void>;  // New name for fetchModels
+  isLoading: boolean;               // New alias for loadingModels
+  createModel: (data: CreateModelRequest) => Promise<ModelCreateResult>;
+  updateModel: (modelId: string, data: UpdateModelRequest) => Promise<boolean>;
+  deleteModel: (modelId: string) => Promise<boolean>;
+  loadTemplates: () => Promise<void>;
+  templates: BotTemplate[];
+  fetchModels: () => Promise<void>;
+  fetchModel: (modelId: string) => Promise<AIModel | null>;
+  saveNewModel: (name: string, description?: string) => Promise<string | null>;
+  saveModel: () => Promise<boolean>;
+  removeModel: (modelId: string) => Promise<boolean>;
+
+    // Nodes
+  addNode: (nodeData: Omit<CreateNodeRequest, 'id'>) => Promise<string | null>;
+  updateNodeData: (nodeId: string, data: Partial<AINodeData>) => Promise<boolean>;
+  updateNodePosition: (nodeId: string, x: number, y: number) => Promise<boolean>;
+  removeNodes: (nodeIds: string[]) => Promise<boolean>;
+    // Connections
+  addConnection: (sourceId: string, targetId: string) => Promise<string | null>;
+  removeConnections: (connectionIds: string[]) => Promise<boolean>;
+    // Knowledge Bases
+  knowledgeBases: KnowledgeBase[];
+  loadingKnowledgeBases: boolean;
+  fetchKnowledgeBases: () => Promise<void>;
+  addKnowledgeBase: (name: string, description?: string) => Promise<KnowledgeBase | null>;
+    // Errors
   error: string | null;
-  
-  // Model operations
-  loadModels: () => Promise<void>;
-  createModel: (data: { name: string; templateId?: string }) => Promise<AIModel>;
-  updateModel: (modelId: string, data: Partial<AIModel>) => Promise<void>;
-  deleteModel: (modelId: string) => Promise<void>;
-  loadModel: (modelId: string) => Promise<void>;
-  
-  // Node operations
-  addNode: (nodeData: Omit<AINodeData, 'id'>) => Promise<void>;
-  updateNode: (nodeId: string, data: Partial<AINodeData>) => Promise<void>;
-  deleteNode: (nodeId: string) => Promise<void>;
-  
-  // Connection operations
-  addConnection: (connectionData: Omit<AIConnectionData, 'id'>) => Promise<void>;
-  deleteConnection: (connectionId: string) => Promise<void>;
+  clearError: () => void;
 }
 
 const AIBuilderContext = createContext<AIBuilderContextType | undefined>(undefined);
 
-interface AIBuilderProviderProps {
-  children: React.ReactNode;
-}
-
-export function AIBuilderProvider({ children }: AIBuilderProviderProps) {
+export function AIBuilderProvider({ children }: { children: ReactNode }) {
   const [models, setModels] = useState<AIModel[]>([]);
   const [currentModel, setCurrentModel] = useState<AIModel | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [loadingCurrentModel, setLoadingCurrentModel] = useState(false);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
+  const [loadingKnowledgeBases, setLoadingKnowledgeBases] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<BotTemplate[]>([]);
 
-  // Helper function to handle API calls
-  const handleApiCall = async <T,>(
-    apiCall: () => Promise<T>,
-    errorMessage: string = 'An error occurred'
-  ): Promise<T | null> => {
+  // Fetch models - now named loadModels
+  const loadModels = async () => {
+    setLoadingModels(true);
+    setError(null);
     try {
-      setError(null);
-      setIsLoading(true);
-      return await apiCall();
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : errorMessage);
-      return null;
+      const response = await getModels();
+      setModels(response.models || []);
+    } catch (error: any) {
+      setError(error.message || 'Failed to fetch models');
+      console.error('Error fetching models:', error);
     } finally {
-      setIsLoading(false);
+      setLoadingModels(false);
     }
   };
 
-  // Load all models from database
-  const loadModels = useCallback(async () => {
-    const response = await handleApiCall(async () => {
-      const res = await fetch('/api/ai-builder/models', {
-        method: 'GET',
-        credentials: 'include',
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to load models');
-      }
-      
-      const data = await res.json();
-      return data.models || [];
-    });
-    
-    if (response) {
-      setModels(response);
+  // Fetch a single model
+  const fetchModel = async (modelId: string) => {
+    setLoadingCurrentModel(true);
+    setError(null);
+    try {
+      const response = await getModel(modelId);
+      setCurrentModel(response.model);
+      return response.model;
+    } catch (error: any) {
+      setError(error.message || 'Failed to fetch model');
+      console.error(`Error fetching model ${modelId}:`, error);
+      return null;
+    } finally {
+      setLoadingCurrentModel(false);
     }
-  }, []);
+  };
 
-  // Create a new model
-  const createModel = useCallback(async (data: { name: string; templateId?: string }) => {
-    const response = await handleApiCall(async () => {
-      const res = await fetch('/api/ai-builder/models', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: data.name,
-          description: '',
-          template: data.templateId,
-          isPublic: false,
-          nodes: {},
-          connections: [],
-        }),
+  // Create a new model - original function
+  const saveNewModel = async (name: string, description?: string) => {
+    setError(null);
+    try {
+      const response = await apiCreateModel({
+        name,
+        description,
+        nodes: {},
+        connections: []
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to create model');
-      }
-      
-      const result = await res.json();
-      
-      // Reload models after creation
-      await loadModels();
-      
-      return result.model;
-    });
-    
-    if (!response) {
-      throw new Error('Failed to create model');
+
+      // Refresh models list
+      loadModels();
+
+      return response.modelId;
+    } catch (error: any) {
+      setError(error.message || 'Failed to create model');
+      console.error('Error creating model:', error);
+      return null;
     }
-    return response;
-  }, [loadModels]);
+  };
 
-  // Load a specific model
-  const loadModel = useCallback(async (modelId: string) => {
-    const response = await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${modelId}`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to load model');
-      }
-      
-      const data = await res.json();
-      return data.model;
-    });
-    
-    if (response) {
-      setCurrentModel(response);
+  // Create a new model - new function format with updated implementation
+  const createModel = async (data: CreateModelRequest): Promise<ModelCreateResult> => {
+    setError(null);
+    try {
+      const response = await apiCreateModel(data);
+
+        // Refresh models list
+      loadModels();
+
+      // Return an object with id property
+      return { id: response.modelId };
+    } catch (error: any) {
+      setError(error.message || 'Failed to create model');
+      console.error('Error creating model:', error);
+      throw error; // Propagate the error
     }
-  }, []);
+  };
 
-  // Update a model
-  const updateModel = useCallback(async (modelId: string, data: Partial<AIModel>) => {
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${modelId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
+  // Save current model
+  const saveModel = async () => {
+    if (!currentModel) {
+      setError('No model is currently loaded');
+      return false;
+    }
+
+    setError(null);
+    try {
+      await apiUpdateModel(currentModel.id, {
+        name: currentModel.name,
+        description: currentModel.description,
+        nodes: currentModel.nodes,
+        connections: currentModel.connections
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update model');
-      }
-      
-      // Update local state
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to save model');
+      console.error(`Error saving model ${currentModel.id}:`, error);
+      return false;
+    }
+  };
+
+  // Update model with new format
+  const updateModel = async (modelId: string, data: UpdateModelRequest) => {
+    setError(null);
+    try {
+      await apiUpdateModel(modelId, data);
+
+      // Update models list
+    loadModels();
+
+      // Update current model if it's the one we're editing
       if (currentModel?.id === modelId) {
-        setCurrentModel({ ...currentModel, ...data });
+        setCurrentModel(prevModel => prevModel ? {...prevModel, ...data} : null);
       }
-      
-      // Reload models to get fresh data
-      await loadModels();
-    });
-  }, [currentModel, loadModels]);
+
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to update model');
+      console.error(`Error updating model ${modelId}:`, error);
+      return false;
+    }
+  };
 
   // Delete a model
-  const deleteModel = useCallback(async (modelId: string) => {
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${modelId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to delete model');
-      }
-      
-      // Update local state
+  const removeModel = async (modelId: string) => {
+    setError(null);
+    try {
+      await apiDeleteModel(modelId);
+
+      // Update models list
       setModels(prevModels => prevModels.filter(model => model.id !== modelId));
+
+      // Clear current model if it was the deleted one
       if (currentModel?.id === modelId) {
         setCurrentModel(null);
       }
-    });
-  }, [currentModel]);
 
-  // Add a node to the current model
-  const addNode = useCallback(async (nodeData: Omit<AINodeData, 'id'>) => {
-    if (!currentModel) {
-      setError('No model selected');
-      return;
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to delete model');
+      console.error(`Error deleting model ${modelId}:`, error);
+      return false;
     }
+  };
 
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${currentModel.id}/nodes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(nodeData),
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to add node');
-      }
-      
-      // Reload the model to get updated data
-      await loadModel(currentModel.id);
-    });
-  }, [currentModel, loadModel]);
-
-  // Update a node
-  const updateNode = useCallback(async (nodeId: string, data: Partial<AINodeData>) => {
-    if (!currentModel) {
-      setError('No model selected');
+  // Load templates function
+  const loadTemplates = async () => {
+    setError(null);
+    try {
+      // Placeholder implementation - replace with actual API call
+      setTemplates([]);
       return;
-    }
+    } catch (error: any) {
+      setError(error.message || 'Failed to load templates');
+      console.error('Error loading templates:', error);
+}
+  };
 
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${currentModel.id}/nodes/${nodeId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update node');
-      }
-      
-      // Update local state
+  // Add a node
+  const addNode = async (nodeData: Omit<CreateNodeRequest, 'id'>) => {
+    if (!currentModel) {
+      setError('No model is currently loaded');
+      return null;
+  }
+
+    setError(null);
+    try {
+      const response = await createNode(currentModel.id, nodeData as CreateNodeRequest);
+      const nodeId = response.nodeId;
+
+      // Update current model with new node
       setCurrentModel(prevModel => {
         if (!prevModel) return null;
-        
-        const updatedNodes = { ...prevModel.nodes };
-        if (updatedNodes[nodeId]) {
-          updatedNodes[nodeId] = { ...updatedNodes[nodeId], ...data };
-        }
-        
-        return { ...prevModel, nodes: updatedNodes };
+        return {
+          ...prevModel,
+          nodes: {
+            ...prevModel.nodes,
+            [nodeId]: {
+              type: nodeData.type,
+              x: nodeData.x,
+              y: nodeData.y,
+              title: nodeData.title,
+              data: nodeData.data || {}
+}
+          }
+        };
       });
-    });
-  }, [currentModel]);
 
-  // Delete a node
-  const deleteNode = useCallback(async (nodeId: string) => {
+      return nodeId;
+    } catch (error: any) {
+      setError(error.message || 'Failed to add node');
+      console.error('Error adding node:', error);
+      return null;
+    }
+  };
+
+  // Update node data
+  const updateNodeData = async (nodeId: string, data: Partial<AINodeData>) => {
     if (!currentModel) {
-      setError('No model selected');
-      return;
+      setError('No model is currently loaded');
+      return false;
     }
 
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${currentModel.id}/nodes/${nodeId}`, {
-        method: 'DELETE',
-        credentials: 'include',
+    setError(null);
+    try {
+      await updateNode(currentModel.id, nodeId, data);
+
+      // Update node in current model
+      setCurrentModel(prevModel => {
+        if (!prevModel || !prevModel.nodes[nodeId]) return prevModel;
+
+        return {
+          ...prevModel,
+          nodes: {
+            ...prevModel.nodes,
+            [nodeId]: {
+              ...prevModel.nodes[nodeId],
+              ...data
+            }
+          }
+        };
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to delete node');
-      }
-      
-      // Update local state
+
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to update node');
+      console.error(`Error updating node ${nodeId}:`, error);
+      return false;
+    }
+  };
+
+  // Update node position
+  const updateNodePosition = async (nodeId: string, x: number, y: number) => {
+    return updateNodeData(nodeId, { x, y });
+  };
+
+  // Remove nodes
+  const removeNodes = async (nodeIds: string[]) => {
+    if (!currentModel) {
+      setError('No model is currently loaded');
+      return false;
+    }
+
+    setError(null);
+    try {
+      await deleteNodes(currentModel.id, nodeIds);
+
+      // Remove nodes from current model
       setCurrentModel(prevModel => {
         if (!prevModel) return null;
-        
+
         const updatedNodes = { ...prevModel.nodes };
-        delete updatedNodes[nodeId];
-        
-        // Also remove connections related to this node
-        const updatedConnections = prevModel.connections.filter(
-          conn => conn.sourceId !== nodeId && conn.targetId !== nodeId
+        nodeIds.forEach(id => {
+          delete updatedNodes[id];
+        });
+
+        // Also remove connections involving these nodes
+        const updatedConnections = prevModel.connections.filter(conn =>
+          !nodeIds.includes(conn.sourceId) && !nodeIds.includes(conn.targetId)
         );
-        
-        return { 
-          ...prevModel, 
+
+        return {
+          ...prevModel,
           nodes: updatedNodes,
           connections: updatedConnections
         };
       });
-    });
-  }, [currentModel]);
+
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to remove nodes');
+      console.error('Error removing nodes:', error);
+      return false;
+    }
+  };
 
   // Add a connection
-  const addConnection = useCallback(async (connectionData: Omit<AIConnectionData, 'id'>) => {
+  const addConnection = async (sourceId: string, targetId: string) => {
     if (!currentModel) {
-      setError('No model selected');
-      return;
+      setError('No model is currently loaded');
+      return null;
     }
 
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${currentModel.id}/connections`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(connectionData),
+    setError(null);
+    try {
+      const response = await createConnection(currentModel.id, {
+        id: '', // ID will be generated by the server
+        sourceId,
+        targetId
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to add connection');
-      }
-      
-      const result = await res.json();
-      
-      // Update local state
+
+      const connectionId = response.connectionId;
+
+      // Update current model with new connection
       setCurrentModel(prevModel => {
         if (!prevModel) return null;
-        
+
+        // Make sure we're creating a connection that matches the expected type
         const newConnection: AIConnectionData = {
-          ...connectionData,
-          id: result.connectionId,
+          id: connectionId,
+          sourceId,
+          targetId
         };
-        
         return {
           ...prevModel,
-          connections: [...prevModel.connections, newConnection],
+          connections: [
+            ...prevModel.connections,
+            newConnection
+          ]
         };
       });
-    });
-  }, [currentModel]);
 
-  // Delete a connection
-  const deleteConnection = useCallback(async (connectionId: string) => {
-    if (!currentModel) {
-      setError('No model selected');
-      return;
+      return connectionId;
+    } catch (error: any) {
+      setError(error.message || 'Failed to add connection');
+      console.error('Error adding connection:', error);
+      return null;
     }
+  };
 
-    await handleApiCall(async () => {
-      const res = await fetch(`/api/ai-builder/models/${currentModel.id}/connections/${connectionId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to delete connection');
-      }
-      
-      // Update local state
+  // Remove connections
+  const removeConnections = async (connectionIds: string[]) => {
+    if (!currentModel) {
+      setError('No model is currently loaded');
+      return false;
+    }
+    setError(null);
+    try {
+      await deleteConnections(currentModel.id, connectionIds);
+
+      // Remove connections from current model
       setCurrentModel(prevModel => {
         if (!prevModel) return null;
-        
-        const updatedConnections = prevModel.connections.filter(
-          conn => conn.id !== connectionId
-        );
-        
-        return { ...prevModel, connections: updatedConnections };
-      });
-    });
-  }, [currentModel]);
 
-  const value: AIBuilderContextType = {
+        return {
+          ...prevModel,
+          connections: prevModel.connections.filter(conn => !connectionIds.includes(conn.id))
+        };
+      });
+
+      return true;
+    } catch (error: any) {
+      setError(error.message || 'Failed to remove connections');
+      console.error('Error removing connections:', error);
+      return false;
+    }
+  };
+
+  // Fetch knowledge bases
+  const fetchKnowledgeBases = async () => {
+    setLoadingKnowledgeBases(true);
+    setError(null);
+    try {
+      const response = await getKnowledgeBases();
+      setKnowledgeBases(response.knowledgeBases || []);
+    } catch (error: any) {
+      setError(error.message || 'Failed to fetch knowledge bases');
+      console.error('Error fetching knowledge bases:', error);
+    } finally {
+      setLoadingKnowledgeBases(false);
+    }
+  };
+
+  // Create a knowledge base
+  const addKnowledgeBase = async (name: string, description?: string) => {
+    setError(null);
+    try {
+      const response = await createKnowledgeBase({ name, description });
+
+      // Add new knowledge base to list
+      setKnowledgeBases(prev => [...prev, response.knowledgeBase]);
+
+      return response.knowledgeBase;
+    } catch (error: any) {
+      setError(error.message || 'Failed to create knowledge base');
+      console.error('Error creating knowledge base:', error);
+      return null;
+    }
+  };
+
+  // Clear error
+  const clearError = () => setError(null);
+
+  // Load models on mount
+  useEffect(() => {
+    loadModels();
+    fetchKnowledgeBases();
+    loadTemplates();
+  }, []);
+
+  const value = {
+    // Models
     models,
     currentModel,
-    isLoading,
-    error,
+    loadingModels,
+    loadingCurrentModel,
+
+    // Compatibility aliases
     loadModels,
+    isLoading: loadingModels,
     createModel,
     updateModel,
-    deleteModel,
-    loadModel,
+    deleteModel: removeModel,
+    loadTemplates,
+    templates,
+
+    // Original functions
+    fetchModels: loadModels,
+    fetchModel,
+    saveNewModel,
+    saveModel,
+    removeModel,
+
+    // Nodes
     addNode,
-    updateNode,
-    deleteNode,
+    updateNodeData,
+    updateNodePosition,
+    removeNodes,
+
+    // Connections
     addConnection,
-    deleteConnection,
+    removeConnections,
+
+    // Knowledge Bases
+    knowledgeBases,
+    loadingKnowledgeBases,
+    fetchKnowledgeBases,
+    addKnowledgeBase,
+
+    // Errors
+    error,
+    clearError
   };
 
   return (
@@ -392,4 +528,4 @@ export function useAIBuilderContext() {
   }
   return context;
 }
-// Add this new type definition at the top of the file
+

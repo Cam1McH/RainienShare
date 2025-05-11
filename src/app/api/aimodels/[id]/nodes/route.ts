@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createNode, deleteNode } from '@/lib/api/aiBuilder';
+import { createNode, deleteNode, handleAIBuilderError } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
 
 export async function POST(
@@ -18,10 +18,6 @@ export async function POST(
     // Parse request body
     const data = await req.json();
     
-    if (!data.type || !data.title) {
-      return NextResponse.json({ error: 'Node type and title are required' }, { status: 400 });
-    }
-    
     // Create the node
     const nodeId = await createNode(modelId, data, user.id);
     
@@ -29,16 +25,11 @@ export async function POST(
       success: true, 
       nodeId,
       message: 'Node created successfully' 
-    });
+    }, { status: 201 });
   } catch (error) {
-    console.error('Error creating node:', error);
-    return NextResponse.json(
-      { error: 'Failed to create node' },
-      { status: 500 }
-    );
+    return handleAIBuilderError(error);
   }
 }
-
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -67,10 +58,6 @@ export async function DELETE(
       message: 'Nodes deleted successfully' 
     });
   } catch (error) {
-    console.error('Error deleting nodes:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete nodes' },
-      { status: 500 }
-    );
+    return handleAIBuilderError(error);
   }
 }

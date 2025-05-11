@@ -24,7 +24,7 @@ export default function AIModelsSection({
   setActiveTab,
   launchAIBuilder
 }: AIModelsSectionProps) {
-  const { models, loadModels, isLoading, error, createModel, deleteModel, updateModel } = useAIBuilderContext();
+  const { models, loadModels, isLoading, error, createModel, deleteModel, updateModel, loadTemplates, templates } = useAIBuilderContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -33,9 +33,17 @@ export default function AIModelsSection({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<'all' | ModelStatus>('all');
   
+  // Load models and templates on mount
   useEffect(() => {
+    console.log('AIModelsSection mounted, loading data...');
     loadModels();
-  }, [loadModels]);
+    loadTemplates();
+  }, [loadModels, loadTemplates]);
+
+  // Log when models change
+  useEffect(() => {
+    console.log('Models updated:', models);
+  }, [models]);
   
   // Filter models based on search and status
   const filteredModels = models.filter(model => {
@@ -56,26 +64,28 @@ export default function AIModelsSection({
   
   const handleDuplicateModel = async (model: AIModel) => {
     try {
-      // Create a new model with duplicate data
-      const duplicatedName = `${model.name} (Copy)`;
-      const duplicatedModel = await createModel({
-        name: duplicatedName,
-        templateId: undefined // Or use model.template if you want to duplicate with the same template
-      });
-      
-      // After creation, update it with the original model's data
-      await updateModel(duplicatedModel.id, {
+      const template = model.templateId || '';  // Handle possibly undefined templateId
+      const newModel = await createModel({
+        name: `${model.name} (Copy)`,
         description: model.description,
-        nodes: model.nodes,
-        connections: model.connections,
-        canvasData: model.canvasData,
+        templateId: template || undefined
       });
+
+      if (newModel && newModel.id) {
+        await updateModel(newModel.id, {
+          description: model.description,
+          nodes: model.nodes,
+          connections: model.connections,
+          canvasData: model.canvasData,
+        });
+        launchAIBuilder(newModel.id);
+      }
       
-      // Reload models to show the new duplicate
-      await loadModels();
+      console.log('Model duplicated successfully');
       setShowActions(null);
     } catch (error) {
       console.error('Failed to duplicate model:', error);
+      // You might want to show an error message to the user here
     }
   };
   
@@ -88,12 +98,14 @@ export default function AIModelsSection({
   const confirmDelete = async (modelName: string) => {
     if (selectedModel && modelName === selectedModel.name) {
       try {
+        console.log('Deleting model:', selectedModel.id);
         await deleteModel(selectedModel.id);
         setShowDeleteModal(false);
         setSelectedModel(null);
-        // Models will be reloaded automatically by the context
+        console.log('Model deleted successfully');
       } catch (error) {
         console.error('Failed to delete model:', error);
+        // You might want to show an error message to the user here
       }
     }
   };
@@ -101,12 +113,14 @@ export default function AIModelsSection({
   const toggleModelStatus = async (model: AIModel) => {
     try {
       const newStatus = model.status === 'active' ? 'inactive' : 'active';
+      console.log('Updating model status:', model.id, 'to', newStatus);
+      
       await updateModel(model.id, { status: newStatus });
       setShowActions(null);
-      // Reload models to get updated status
-      await loadModels();
+      console.log('Model status updated successfully');
     } catch (error) {
       console.error('Failed to update model status:', error);
+      // You might want to show an error message to the user here
     }
   };
   
@@ -130,7 +144,7 @@ export default function AIModelsSection({
   };
 
   // Show loading state
-  if (isLoading) {
+  if (isLoading && models.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
@@ -139,16 +153,16 @@ export default function AIModelsSection({
   }
 
   // Show error state
-  if (error) {
+  if (error && models.length === 0) {
     return (
       <div className={`rounded-2xl ${theme === "dark" ? "bg-[#13131f] border-[#2a2a3c]" : "bg-white border-gray-200"} border shadow-sm`}>
         <div className="p-12 text-center">
-          <p className={`text-sm ${theme === "dark" ? "text-red-400" : "text-red-600"}`}>
+          <p className={`text-sm ${theme === "dark" ? "text-red-400" : "text-red-600"} mb-4`}>
             Error loading models: {error}
           </p>
           <button
             onClick={() => loadModels()}
-            className="mt-4 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all"
+            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all"
           >
             Try Again
           </button>
@@ -289,7 +303,7 @@ export default function AIModelsSection({
                         </span>
                       </div>
                       <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"} line-clamp-2`}>
-                        {model.description || ''}
+                        {model.description || 'No description'}
                       </p>
                     </div>
                     
@@ -409,16 +423,24 @@ export default function AIModelsSection({
           onClose={() => setShowCreateModal(false)}
           onCreateModel={async (name, templateId) => {
             try {
-              const model = await createModel({ name, templateId });
+              console.log('Creating model:', name, 'with template:', templateId);
+              const newModel = await createModel({
+                name: name,
+                description: '',
+                templateId: templateId
+              });
+              if (newModel && newModel.id) {
               setShowCreateModal(false);
-              launchAIBuilder(model.id);
+                launchAIBuilder(newModel.id);
+            }
             } catch (error) {
               console.error('Failed to create model:', error);
+              // You might want to show an error message to the user here
             }
           }}
         />
       )}
-      
+
       {showDeleteModal && selectedModel && (
         <DeleteBotModal
           theme={theme}
@@ -430,20 +452,26 @@ export default function AIModelsSection({
           onConfirm={confirmDelete}
         />
       )}
-      
+
       {showTemplates && (
         <TemplateGallery
           theme={theme}
           onSelectTemplate={async (template) => {
             try {
-              const model = await createModel({ 
-                name: template.name || 'New Bot', 
-                templateId: template.id 
+              console.log('Selected template:', template);
+              const template_id = template.id || '';  // Handle possibly undefined templateId
+              const newModel = await createModel({
+                name: template.name || 'New Bot',
+                description: template.description,
+                templateId: template_id || undefined
               });
-              setShowTemplates(false);
-              launchAIBuilder(model.id);
+              if (newModel && newModel.id) {
+                setShowTemplates(false);
+                launchAIBuilder(newModel.id);
+} 
             } catch (error) {
               console.error('Failed to create model from template:', error);
+              // You might want to show an error message to the user here
             }
           }}
           onClose={() => setShowTemplates(false)}
@@ -452,3 +480,4 @@ export default function AIModelsSection({
     </div>
   );
 }
+

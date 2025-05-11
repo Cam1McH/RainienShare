@@ -43,7 +43,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 // AI Model functions
-export async function fetchAIModels(page = 1, pageSize = 20): Promise<{ models: AIModel[], pagination: any }> {
+export async function getModels(page = 1, pageSize = 20): Promise<{ models: AIModel[], pagination: any }> {
   try {
     const response = await fetch(`/api/aimodels?page=${page}&pageSize=${pageSize}`);
     return handleResponse(response);
@@ -53,7 +53,7 @@ export async function fetchAIModels(page = 1, pageSize = 20): Promise<{ models: 
   }
 }
 
-export async function fetchAIModel(modelId: string): Promise<{ model: AIModel }> {
+export async function getModel(modelId: string): Promise<{ model: AIModel }> {
   try {
     const response = await fetch(`/api/aimodels/${modelId}`);
     return handleResponse(response);
@@ -63,39 +63,55 @@ export async function fetchAIModel(modelId: string): Promise<{ model: AIModel }>
   }
 }
 
-export async function createAIModel(data: CreateModelRequest): Promise<{ success: boolean, modelId: string }> {
+// Define the response structure
+interface CreateModelResponse {
+  success: boolean;
+  modelId: string;
+  message?: string;
+}
+export const createModel = async (data: CreateModelRequest): Promise<CreateModelResponse> => {
   try {
     const response = await fetch('/api/aimodels', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
-    return handleResponse(response);
+    const result = await handleResponse(response) as CreateModelResponse;
+    return result;
   } catch (error) {
-    console.error('Error creating AI model:', error);
+    console.error('Failed to create model:', error);
     throw error;
   }
-}
+};
 
-export async function updateAIModel(modelId: string, data: UpdateModelRequest): Promise<{ success: boolean }> {
+export const updateModel = async (modelId: string, data: UpdateModelRequest) => {
   try {
+    console.log('Saving model:', modelId, data); // Add logging
     const response = await fetch(`/api/aimodels/${modelId}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
-    return handleResponse(response);
+    
+    // Add more detailed error handling
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server responded with error:', response.status, errorText);
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    
+    return await response.json();
   } catch (error) {
-    console.error(`Error updating AI model ${modelId}:`, error);
+    console.error(`Failed to update model ${modelId}:`, error);
     throw error;
   }
-}
+};
 
-export async function deleteAIModel(modelId: string): Promise<{ success: boolean }> {
+export async function deleteModel(modelId: string): Promise<{ success: boolean }> {
   try {
     const response = await fetch(`/api/aimodels/${modelId}`, {
       method: 'DELETE'
@@ -201,7 +217,7 @@ export async function fetchTemplates(): Promise<{ templates: BotTemplate[] }> {
 }
 
 // Knowledge Base functions
-export async function fetchKnowledgeBases(): Promise<{ knowledgeBases: KnowledgeBase[] }> {
+export async function getKnowledgeBases(): Promise<{ knowledgeBases: KnowledgeBase[] }> {
   try {
     const response = await fetch('/api/aimodels/knowledgebases');
     return handleResponse(response);
@@ -211,23 +227,23 @@ export async function fetchKnowledgeBases(): Promise<{ knowledgeBases: Knowledge
   }
 }
 
-export async function createKnowledgeBase(data: CreateKnowledgeBaseRequest): Promise<{ success: boolean, knowledgeBase: KnowledgeBase }> {
+export async function createKnowledgeBase(data: { name: string, description?: string }): Promise<{ success: boolean, knowledgeBase: KnowledgeBase }> {
   try {
-    const response = await fetch('/api/aimodels/knowledgebases', {
+    const response = await fetch('/api/knowledge-bases', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return handleResponse(response);
   } catch (error) {
-    console.error('Error creating knowledge base:', error);
+    console.error('Failed to create knowledge base:', error);
     throw error;
   }
 }
 
-export async function fetchKnowledgeBaseFiles(kbId: string): Promise<{ files: any[] }> {
+export async function getKnowledgeBaseFiles(kbId: string): Promise<{ files: any[] }> {
   try {
     const response = await fetch(`/api/aimodels/knowledgebases/${kbId}/files`);
     return handleResponse(response);
@@ -270,3 +286,4 @@ export async function deleteKnowledgeBaseFiles(kbId: string, fileIds: string[]):
     throw error;
   }
 }
+
