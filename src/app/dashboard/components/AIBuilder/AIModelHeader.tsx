@@ -60,7 +60,12 @@ function AIModelHeader({
   };
   
   return (
-    <div className={`h-14 border-b ${theme === 'dark' ? 'border-[#2a2a3c] bg-[#13131f] text-white' : 'border-gray-200 bg-white text-gray-900'} flex items-center justify-between px-4`}>
+    <div className={`sticky top-0 z-30 h-14 border-b ${
+      theme === 'dark' 
+        ? 'bg-[#13131f]/80 border-[#2a2a3c] text-white' 
+        : 'bg-white/80 border-gray-200 text-gray-900'
+    } backdrop-blur-sm flex items-center justify-between px-4 sm:px-6`}>
+      {/* Left side - Model name */}
       <div className="flex items-center">
         {isEditing ? (
           <input
@@ -70,65 +75,68 @@ function AIModelHeader({
             onBlur={handleSaveName}
             onKeyDown={handleKeyDown}
             autoFocus
-            className={`w-56 px-2 py-1 rounded-md outline-none ${
+            className={`w-56 px-3 py-1.5 rounded-lg text-lg font-medium outline-none ${
               theme === 'dark' 
-                ? 'bg-[#252536] text-white border border-[#373756]' 
-                : 'bg-white text-gray-900 border border-gray-300'
-            }`}
+                ? 'bg-[#1e1e2d] text-white border border-[#2a2a3c] focus:border-purple-500' 
+                : 'bg-white text-gray-900 border border-gray-300 focus:border-purple-500'
+            } transition-colors`}
           />
         ) : (
-          <h2 
-            className={`text-lg font-medium cursor-pointer hover:opacity-80 truncate max-w-md`}
+          <h1 
+            className={`text-lg font-medium cursor-pointer hover:text-purple-400 truncate max-w-md transition-colors`}
             onClick={() => setIsEditing(true)}
           >
             {modelName}
-          </h2>
+          </h1>
         )}
       </div>
       
-      <div className="flex items-center space-x-2">
-        <button 
-          className={`p-1.5 rounded-md ${
-            theme === 'dark' 
-              ? 'hover:bg-[#252536] text-gray-300 disabled:text-gray-600' 
-              : 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400'
-          } disabled:cursor-not-allowed`}
-          onClick={undo} 
-          disabled={!history.canUndo}
-          title="Undo"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 14 4 9l5-5"></path>
-            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>
-          </svg>
-        </button>
+      {/* Right side - Controls */}
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* History controls */}
+        <div className="flex items-center border-r border-gray-700 pr-2 mr-2">
+          <button 
+            className={`p-2 rounded-lg transition-colors ${
+              theme === 'dark' 
+                ? 'hover:bg-[#1e1e2d] text-gray-300 disabled:text-gray-600' 
+                : 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400'
+            } disabled:cursor-not-allowed`}
+            onClick={undo} 
+            disabled={!history.canUndo}
+            title="Undo"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 14 4 9l5-5"></path>
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>
+            </svg>
+          </button>
+          
+          <button 
+            className={`p-2 rounded-lg transition-colors ${
+              theme === 'dark' 
+                ? 'hover:bg-[#1e1e2d] text-gray-300 disabled:text-gray-600' 
+                : 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400'
+            } disabled:cursor-not-allowed`}
+            onClick={redo} 
+            disabled={!history.canRedo}
+            title="Redo"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 14 5-5-5-5"></path>
+              <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"></path>
+            </svg>
+          </button>
+        </div>
         
+        {/* Action buttons */}
         <button 
-          className={`p-1.5 rounded-md ${
+          className={`p-2 rounded-lg transition-colors ${
             theme === 'dark' 
-              ? 'hover:bg-[#252536] text-gray-300 disabled:text-gray-600' 
-              : 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400'
-          } disabled:cursor-not-allowed`}
-          onClick={redo} 
-          disabled={!history.canRedo}
-          title="Redo"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 14 5-5-5-5"></path>
-            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"></path>
-          </svg>
-        </button>
-        
-        <div className={`h-6 w-px ${theme === 'dark' ? 'bg-[#2a2a3c]' : 'bg-gray-200'} mx-1`}></div>
-        
-        <button 
-          className={`p-1.5 rounded-md ${
-            theme === 'dark' 
-              ? 'hover:bg-[#252536] text-gray-300' 
+              ? 'hover:bg-[#1e1e2d] text-gray-300' 
               : 'hover:bg-gray-100 text-gray-700'
           }`}
           onClick={onShowTutorial}
-          title="Tutorial"
+          title="Help"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
@@ -138,9 +146,9 @@ function AIModelHeader({
         </button>
         
         <button 
-          className={`p-1.5 rounded-md ${
+          className={`p-2 rounded-lg transition-colors ${
             theme === 'dark' 
-              ? 'hover:bg-[#252536] text-gray-300' 
+              ? 'hover:bg-[#1e1e2d] text-gray-300' 
               : 'hover:bg-gray-100 text-gray-700'
           }`}
           onClick={onTogglePreview}
@@ -152,12 +160,10 @@ function AIModelHeader({
           </svg>
         </button>
         
-        <div className={`h-6 w-px ${theme === 'dark' ? 'bg-[#2a2a3c]' : 'bg-gray-200'} mx-1`}></div>
-        
         <button 
-          className={`p-1.5 rounded-md ${
+          className={`p-2 rounded-lg transition-colors ${
             theme === 'dark' 
-              ? 'hover:bg-[#252536] text-gray-300' 
+              ? 'hover:bg-[#1e1e2d] text-gray-300' 
               : 'hover:bg-gray-100 text-gray-700'
           }`}
           onClick={() => setIsFullscreen(!isFullscreen)}
@@ -181,26 +187,21 @@ function AIModelHeader({
         </button>
         
         <button 
-          className={`px-3 py-1.5 rounded-md ${
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
             theme === 'dark' 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'bg-blue-500 hover:bg-blue-600 text-white'
+              ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+              : 'bg-purple-500 hover:bg-purple-600 text-white'
           }`}
           onClick={onSave}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-1">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
-          </svg>
           Save
         </button>
         
         {onClose && (
           <button 
-            className={`p-1.5 rounded-md ${
+            className={`p-2 rounded-lg transition-colors ${
               theme === 'dark' 
-                ? 'hover:bg-[#252536] text-gray-300' 
+                ? 'hover:bg-[#1e1e2d] text-gray-300' 
                 : 'hover:bg-gray-100 text-gray-700'
             }`}
             onClick={onClose}

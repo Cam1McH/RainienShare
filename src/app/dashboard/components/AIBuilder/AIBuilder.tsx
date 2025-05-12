@@ -31,7 +31,6 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
     saveModel,
     addNode,
     updateNodeData,
-    updateNodePosition,
     removeNodes,
     addConnection,
     removeConnections,
@@ -53,6 +52,9 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Track node positions locally for immediate updates
+  const [localNodePositions, setLocalNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+  
   // Use ref to track if model is already loaded
   const isModelLoaded = useRef(false);
   const prevModelId = useRef<string | undefined>(undefined);
@@ -69,6 +71,13 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
           if (model) {
             setModelName(model.name);
             isModelLoaded.current = true;
+            
+            // Initialize local positions from model data
+            const initialPositions: Record<string, { x: number; y: number }> = {};
+            Object.entries(model.nodes).forEach(([nodeId, nodeData]) => {
+              initialPositions[nodeId] = { x: nodeData.x, y: nodeData.y };
+            });
+            setLocalNodePositions(initialPositions);
           }
         } catch (error) {
           console.error('Failed to load model:', error);
@@ -77,14 +86,14 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
     };
 
     loadModel();
-  }, [modelId]); // Only depend on modelId, not fetchModel
+  }, [modelId, fetchModel]);
 
   // Update model name when currentModel changes (only once)
   useEffect(() => {
     if (currentModel && currentModel.name !== modelName) {
       setModelName(currentModel.name);
     }
-  }, [currentModel?.id, currentModel?.name]); // Only react to specific changes
+  }, [currentModel?.id, currentModel?.name, modelName]);
 
   // Save model function
   const handleSave = async () => {
@@ -108,7 +117,18 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
           router.push(`/dashboard?modelId=${result.id}`);
         }
       } else {
-        // Update existing model
+        // Apply local positions to model data before saving
+        const updatedNodes = {...currentModel.nodes};
+        Object.entries(localNodePositions).forEach(([nodeId, pos]) => {
+          if (updatedNodes[nodeId]) {
+            updatedNodes[nodeId] = {
+              ...updatedNodes[nodeId],
+              x: pos.x,
+              y: pos.y
+            };
+          }
+        });
+        
         const success = await saveModel();
         if (success) {
           // Update model name if changed
@@ -142,10 +162,28 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
     }
   };
 
-  // Handle node movement
+  // Handle node movement with immediate visual feedback
   const handleNodeMove = async (nodeId: string, x: number, y: number) => {
-    // Update position locally first for immediate UI feedback
-    await updateNodePosition(nodeId, x, y);
+    // Update local position immediately for UI responsiveness
+    setLocalNodePositions(prev => ({
+      ...prev,
+      [nodeId]: { x, y }
+    }));
+    
+    // Debounce server updates
+    clearTimeout((window as any)[`nodeMove_${nodeId}`]);
+    (window as any)[`nodeMove_${nodeId}`] = setTimeout(async () => {
+      await updateNodeData(nodeId, { x, y });
+    }, 100);
+  };
+
+  // Handle node movement completion
+  const handleNodeMoveComplete = async (nodeId: string) => {
+    // Ensure final position is saved
+    const finalPosition = localNodePositions[nodeId];
+    if (finalPosition) {
+      await updateNodeData(nodeId, { x: finalPosition.x, y: finalPosition.y });
+    }
   };
 
   // Handle node deletion
@@ -259,36 +297,49 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
             onClose={closeAIBuilder}
           >
             {/* Nodes */}
-            {currentModel && Object.entries(currentModel.nodes).map(([nodeId, node]) => (
-              <AINode
-                key={nodeId}
-                id={nodeId}
-                node={node}
-                theme={theme}
-                isSelected={selectedNodeId === nodeId}
-                canvasScale={canvasScale}
-                onSelect={() => setSelectedNodeId(nodeId)}
-                onMove={(x, y) => handleNodeMove(nodeId, x, y)}
-                onDelete={() => handleNodeDelete(nodeId)}
-                onStartConnection={handleStartConnection}
-                onEndConnection={handleEndConnection}
-                setIsDragging={setIsDragging}
-              />
-            ))}
+            {currentModel && Object.entries(currentModel.nodes).map(([nodeId, nodeData]) => {
+              // Use local position if available, otherwise use node position
+              const position = localNodePositions[nodeId] || { x: nodeData.x, y: nodeData.y };
+              
+              // Create a new node object with the updated position
+              const nodeWithPosition: AINodeData = {
+                ...nodeData,
+                x: position.x,
+                y: position.y
+              };
+              
+              return (
+                <AINode
+                  key={nodeId}
+                  id={nodeId}
+                  node={nodeWithPosition}
+                  theme={theme}
+                  isSelected={selectedNodeId === nodeId}
+                  canvasScale={canvasScale}
+                  onSelect={() => setSelectedNodeId(nodeId)}
+                  onMove={(x, y) => handleNodeMove(nodeId, x, y)}
+                  onDelete={() => handleNodeDelete(nodeId)}
+                  onStartConnection={handleStartConnection}
+                  onEndConnection={handleEndConnection}
+                  setIsDragging={setIsDragging}
+                  onMoveComplete={() => handleNodeMoveComplete(nodeId)}
+                />
+              );
+            })}
 
             {/* Connections */}
-            {currentModel && currentModel.connections.map((connection) => (
+            {currentModel && currentModel.connections.map((connection: AIConnectionData) => (
               <AIConnection
                 key={connection.id}
                 connection={connection}
-                nodes={currentModel.nodes}
+                nodes={currentModel.nodes || {}}
                 theme={theme}
                 onDelete={() => handleDeleteConnection(connection.id)}
               />
             ))}
 
             {/* Connecting line */}
-            {connecting && currentModel?.nodes[connecting.sourceId] && (
+            {connecting && currentModel?.nodes && connecting.sourceId in currentModel.nodes && (
               <svg
                 className="absolute inset-0 pointer-events-none"
                 style={{ width: '100%', height: '100%' }}
@@ -317,7 +368,7 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
         </div>
 
         {/* Side panel for node settings */}
-        {selectedNodeId && currentModel?.nodes[selectedNodeId] && (
+        {selectedNodeId && currentModel?.nodes && selectedNodeId in currentModel.nodes && (
           <div className={`w-96 ${theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'} border-l shadow-xl`}>
             <NodeSettings
               theme={theme}

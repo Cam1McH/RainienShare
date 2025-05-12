@@ -1,7 +1,12 @@
 // src/app/api/aimodels/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getModelWithData, updateModel, deleteModel } from '@/lib/api/aiBuilder';
 import { getServerUser } from '@/lib/serverAuth';
+// Fix: Import from the client module where deleteModel actually exists
+import { 
+  getModel as getModelWithData, 
+  updateModel, 
+  deleteModel 
+} from '@/lib/api/aiBuilderClient';
 
 export async function GET(
   req: NextRequest,
@@ -18,14 +23,38 @@ export async function GET(
     const params = await context.params;
     const modelId = params.id;
     
-    // Get model from database
-    const result = await getModelWithData(modelId, user.id);
+    // Validate modelId before passing to database
+    if (!modelId || modelId === 'undefined' || modelId === 'null') {
+      return NextResponse.json(
+        { error: 'Invalid model ID' },
+        { status: 400 }
+      );
+    }
     
-    return NextResponse.json(result);
+    // Get model from database with proper error handling
+    try {
+      const result = await getModelWithData(modelId);
+      return NextResponse.json(result);
+    } catch (error: any) {
+      console.error('Error fetching AI model:', error);
+      
+      // Handle specific error status codes
+      if (error.message?.includes('not found') || error.statusCode === 404) {
+        return NextResponse.json(
+          { error: 'Model not found' },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json(
+        { error: 'Failed to fetch model' },
+        { status: error.statusCode || 500 }
+      );
+    }
   } catch (error) {
-    console.error('Error fetching AI model:', error);
+    console.error('Unexpected error in GET /api/aimodels/[id]:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch model' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -49,6 +78,14 @@ export async function PUT(
     const params = await context.params;
     const modelId = params.id;
     
+    // Validate modelId
+    if (!modelId || modelId === 'undefined' || modelId === 'null') {
+      return NextResponse.json(
+        { error: 'Invalid model ID' },
+        { status: 400 }
+      );
+    }
+    
     // Parse request body
     const data = await req.json();
     console.log('Request data:', data); // Log request data
@@ -58,7 +95,7 @@ export async function PUT(
     }
     
     // Update the model
-    await updateModel(modelId, data, user.id);
+    await updateModel(modelId, data);
     
     return NextResponse.json({ 
       success: true,
@@ -88,8 +125,16 @@ export async function DELETE(
     const params = await context.params;
     const modelId = params.id;
     
+    // Validate modelId
+    if (!modelId || modelId === 'undefined' || modelId === 'null') {
+      return NextResponse.json(
+        { error: 'Invalid model ID' },
+        { status: 400 }
+      );
+    }
+    
     // Delete the model
-    await deleteModel(modelId, user.id);
+    await deleteModel(modelId);
     
     return NextResponse.json({ 
       success: true,

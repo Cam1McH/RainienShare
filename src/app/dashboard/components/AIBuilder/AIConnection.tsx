@@ -22,10 +22,13 @@ function AIConnection({
 }: AIConnectionProps) {
   const [hoverState, setHoverState] = useState(false);
   
+  // Check if both source and target nodes exist
+  if (!nodes[connection.sourceId] || !nodes[connection.targetId]) {
+    return null;
+  }
+  
   const sourceNode = nodes[connection.sourceId];
   const targetNode = nodes[connection.targetId];
-  
-  if (!sourceNode) return null;
   
   // Calculate source point (right edge of source node)
   const sourceX = sourceNode.x + 240;
@@ -38,11 +41,9 @@ function AIConnection({
   if (isBeingDragged && draggedEnd) {
     targetX = draggedEnd.x;
     targetY = draggedEnd.y;
-  } else if (targetNode) {
+  } else {
     targetX = targetNode.x;
     targetY = targetNode.y + 50;
-  } else {
-    return null;
   }
   
   // Calculate control points for bezier curve
@@ -67,7 +68,7 @@ function AIConnection({
   
   // Get connection color based on source node type
   const getConnectionColor = () => {
-    const colors = {
+    const colors: Record<string, string> = {
       input: '#3b82f6',
       process: '#10b981',
       output: '#8b5cf6',
@@ -158,7 +159,7 @@ function AIConnection({
             fill={color}
             fontWeight="600"
           >
-            {sourceNode.type} → {targetNode?.type || '...'}
+            {sourceNode.type} → {targetNode.type}
           </text>
         </g>
       )}
@@ -194,7 +195,7 @@ function AIConnection({
       )}
       
       {/* Snap indicator when dragging */}
-      {isBeingDragged && targetNode && (
+      {isBeingDragged && (
         <circle
           cx={targetX}
           cy={targetY}

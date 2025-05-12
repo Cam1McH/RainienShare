@@ -17,6 +17,7 @@ interface AINodeProps {
   onEndConnection: (targetId: string) => void;
   setIsDragging: (isDragging: boolean) => void;
   onConnectionDrag?: (sourceId: string, mousePos: { x: number; y: number }) => void;
+  onMoveComplete?: () => void;
 }
 
 function AINode({
@@ -31,7 +32,8 @@ function AINode({
   onStartConnection,
   onEndConnection,
   setIsDragging,
-  onConnectionDrag
+  onConnectionDrag,
+  onMoveComplete
 }: AINodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
@@ -82,24 +84,30 @@ function AINode({
   
   const nodeStyles = getNodeStyles();
   
+  // Get canvas rect for coordinate calculations
+  const getCanvasRect = () => {
+    const canvas = document.querySelector('.ai-builder-canvas');
+    return canvas?.getBoundingClientRect() || { left: 0, top: 0 };
+  };
+  
   // Node dragging logic
   const handleMouseDown = (e: React.MouseEvent) => {
     // Don't start drag on buttons or connection ports
     if ((e.target as HTMLElement).closest('.node-action') || 
         (e.target as HTMLElement).closest('.connection-port')) return;
     
+    e.preventDefault();
     e.stopPropagation();
     onSelect();
     
-    // Calculate the offset from node position to mouse position
-    const rect = nodeRef.current?.getBoundingClientRect();
-    if (rect) {
-      const currentTransform = new DOMMatrix(getComputedStyle(nodeRef.current!).transform);
-      const offsetX = e.clientX - (node.x * canvasScale + currentTransform.e);
-      const offsetY = e.clientY - (node.y * canvasScale + currentTransform.f);
-      
-      setDragOffset({ x: offsetX, y: offsetY });
-    }
+    const canvasRect = getCanvasRect();
+    const currentX = e.clientX - canvasRect.left;
+    const currentY = e.clientY - canvasRect.top;
+    
+    setDragOffset({
+      x: currentX - node.x,
+      y: currentY - node.y
+    });
     
     setIsDraggingNode(true);
     setIsDragging(true);
@@ -111,10 +119,15 @@ function AINode({
       if (isDraggingNode) {
         e.preventDefault();
         
-        // Calculate new position considering canvas scale and drag offset
-        const newX = (e.clientX - dragOffset.x) / canvasScale;
-        const newY = (e.clientY - dragOffset.y) / canvasScale;
+        const canvasRect = getCanvasRect();
+        const mouseX = e.clientX - canvasRect.left;
+        const mouseY = e.clientY - canvasRect.top;
         
+        // Calculate new position
+        const newX = mouseX - dragOffset.x;
+        const newY = mouseY - dragOffset.y;
+        
+        // Call onMove with the new position
         onMove(newX, newY);
       }
     };
@@ -123,19 +136,22 @@ function AINode({
       if (isDraggingNode) {
         setIsDraggingNode(false);
         setIsDragging(false);
+        onMoveComplete?.();
       }
     };
     
     if (isDraggingNode) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mouseleave', handleMouseUp);
     }
     
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseleave', handleMouseUp);
     };
-  }, [isDraggingNode, dragOffset, canvasScale, onMove, setIsDragging]);
+  }, [isDraggingNode, dragOffset, onMove, onMoveComplete, setIsDragging]);
   
   // Connection dragging from node
   const handleConnectionMouseDown = (e: React.MouseEvent, isOutput: boolean) => {
@@ -172,6 +188,7 @@ function AINode({
         top: node.y,
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
+        transform: isDraggingNode ? 'none' : undefined // Disable transform during dragging
       }}
       onMouseDown={handleMouseDown}
     >
