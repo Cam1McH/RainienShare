@@ -14,6 +14,7 @@ import AIPreview from './AIPreview';
 import InteractiveTutorial from './InteractiveTutorial';
 import { AINodeData, AIConnectionData, AINodeType } from './types';
 import { Plus } from 'lucide-react';
+import { AINodeData as ApiNodeData } from '@/lib/api/aiBuilderTypes';
 
 interface AIBuilderProps {
   theme: 'light' | 'dark';
@@ -38,6 +39,27 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
     error,
   } = useAIBuilderContext();
 
+const adaptNodeForComponent = (node: any): any => {
+  return {
+    ...node,
+    // Convert string type to enum if needed
+    type: typeof node.type === 'string' 
+      ? node.type as unknown as AINodeType 
+      : node.type
+  };
+};
+
+const adaptNodesForComponent = (nodes: Record<string, any>): any => {
+  const adaptedNodes: Record<string, any> = {};
+  
+  Object.entries(nodes).forEach(([nodeId, node]) => {
+    adaptedNodes[nodeId] = adaptNodeForComponent(node);
+  });
+  
+  return adaptedNodes;
+};
+
+
   // Local state for UI
   const [modelName, setModelName] = useState('My AI Assistant');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -57,43 +79,81 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
   
   // Use ref to track if model is already loaded
   const isModelLoaded = useRef(false);
-  const prevModelId = useRef<string | undefined>(undefined);
+const prevModelId = useRef<string | undefined>(undefined);
+const loadAttempted = useRef(false);
 
-  // Load model data only when modelId changes and hasn't been loaded yet
-  useEffect(() => {
-    const loadModel = async () => {
-      if (modelId && (!isModelLoaded.current || prevModelId.current !== modelId)) {
-        isModelLoaded.current = false;
-        prevModelId.current = modelId;
+// Load model data only when modelId changes and hasn't been loaded yet
+useEffect(() => {
+  // Skip if no model ID is provided or if we've already attempted loading this model
+  if (!modelId || (loadAttempted.current && prevModelId.current === modelId)) {
+    return;
+  }
+
+  const loadModel = async () => {
+    if (modelId && (!isModelLoaded.current || prevModelId.current !== modelId)) {
+      // Update tracking state before fetch to prevent multiple attempts
+      loadAttempted.current = true;
+      prevModelId.current = modelId;
+      
+      try {
+        console.log(`AIBuilder: Loading model ${modelId}`);
+        const model = await fetchModel(modelId);
         
-        try {
-          const model = await fetchModel(modelId);
-          if (model) {
-            setModelName(model.name);
-            isModelLoaded.current = true;
-            
-            // Initialize local positions from model data
-            const initialPositions: Record<string, { x: number; y: number }> = {};
-            Object.entries(model.nodes).forEach(([nodeId, nodeData]) => {
-              initialPositions[nodeId] = { x: nodeData.x, y: nodeData.y };
+        if (model) {
+          console.log(`AIBuilder: Model loaded successfully`, model.id);
+          setModelName(model.name || 'Untitled Model');
+          isModelLoaded.current = true;
+          
+          // Initialize local positions from model data
+          const initialPositions: Record<string, { x: number; y: number }> = {};
+          
+          // Handle potential undefined or missing nodes
+          if (model.nodes) {
+            Object.entries(model.nodes).forEach(([nodeId, node]) => {
+              if (node && typeof node.x === 'number' && typeof node.y === 'number') {
+                initialPositions[nodeId] = { x: node.x, y: node.y };
+              } else {
+                // Handle missing or invalid position data
+                initialPositions[nodeId] = { 
+                  x: 200 + Math.random() * 200, 
+                  y: 200 + Math.random() * 200 
+                };
+                console.warn(`Node ${nodeId} has invalid position data. Using random position.`);
+              }
             });
-            setLocalNodePositions(initialPositions);
           }
-        } catch (error) {
-          console.error('Failed to load model:', error);
+          
+          setLocalNodePositions(initialPositions);
+        } else {
+          console.error(`AIBuilder: Model is null or undefined`);
         }
+      } catch (error) {
+        console.error('AIBuilder: Failed to load model:', error);
+        
+        // Clear loading flag to allow retrying on component remount
+        isModelLoaded.current = false;
+        
+        // Set error state if provided by parent component
       }
-    };
+    }
+  };
 
-    loadModel();
-  }, [modelId, fetchModel]);
+  loadModel();
+  
+  // Reset loading state if component unmounts or modelId changes
+  return () => {
+    if (prevModelId.current !== modelId) {
+      loadAttempted.current = false;
+    }
+  };
+}, [modelId, fetchModel]); // Keep dependencies minimal
 
   // Update model name when currentModel changes (only once)
   useEffect(() => {
     if (currentModel && currentModel.name !== modelName) {
       setModelName(currentModel.name);
     }
-  }, [currentModel?.id, currentModel?.name, modelName]);
+  }, [currentModel?.id, currentModel?.name]);
 
   // Save model function
   const handleSave = async () => {
@@ -145,22 +205,22 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
   };
 
   // Handle adding nodes
-  const handleAddNode = async (type: AINodeType, data: any) => {
-    if (!currentModel) return;
+const handleAddNode = async (type: AINodeType, data: any) => {
+  if (!currentModel) return;
 
-    const nodeId = await addNode({
-      type,
-      title: data.title || type,
-      description: data.description || '',
-      x: 400 + Math.random() * 100 - 50,
-      y: 300 + Math.random() * 100 - 50,
-      data: { ...data, skillLevel: data.skillLevel || 1 }
-    });
+  const nodeId = await addNode({
+    type: type.toString(), // Convert enum to string for API
+    title: data.title || type.toString(),
+    description: data.description || '', // Include description
+    x: 400 + Math.random() * 100 - 50,
+    y: 300 + Math.random() * 100 - 50,
+    data: { ...data, skillLevel: data.skillLevel || 1 }
+  });
 
-    if (nodeId) {
-      setShowNodePanel(false);
-    }
-  };
+  if (nodeId) {
+    setShowNodePanel(false);
+  }
+};
 
   // Handle node movement with immediate visual feedback
   const handleNodeMove = async (nodeId: string, x: number, y: number) => {
@@ -297,22 +357,19 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
             onClose={closeAIBuilder}
           >
             {/* Nodes */}
-            {currentModel && Object.entries(currentModel.nodes).map(([nodeId, nodeData]) => {
+            {currentModel && Object.entries(currentModel.nodes).map(([nodeId, node]) => {
               // Use local position if available, otherwise use node position
-              const position = localNodePositions[nodeId] || { x: nodeData.x, y: nodeData.y };
-              
-              // Create a new node object with the updated position
-              const nodeWithPosition: AINodeData = {
-                ...nodeData,
-                x: position.x,
-                y: position.y
-              };
+              const position = localNodePositions[nodeId] || { x: node.x, y: node.y };
               
               return (
                 <AINode
                   key={nodeId}
                   id={nodeId}
-                  node={nodeWithPosition}
+                  node={{
+                    ...node,
+                    x: position.x,
+                    y: position.y
+                  }}
                   theme={theme}
                   isSelected={selectedNodeId === nodeId}
                   canvasScale={canvasScale}
@@ -328,18 +385,18 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
             })}
 
             {/* Connections */}
-            {currentModel && currentModel.connections.map((connection: AIConnectionData) => (
+            {currentModel && currentModel.connections.map((connection) => (
               <AIConnection
                 key={connection.id}
                 connection={connection}
-                nodes={currentModel.nodes || {}}
+                nodes={currentModel.nodes}
                 theme={theme}
                 onDelete={() => handleDeleteConnection(connection.id)}
               />
             ))}
 
             {/* Connecting line */}
-            {connecting && currentModel?.nodes && connecting.sourceId in currentModel.nodes && (
+            {connecting && currentModel?.nodes[connecting.sourceId] && (
               <svg
                 className="absolute inset-0 pointer-events-none"
                 style={{ width: '100%', height: '100%' }}
@@ -368,7 +425,7 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId })
         </div>
 
         {/* Side panel for node settings */}
-        {selectedNodeId && currentModel?.nodes && selectedNodeId in currentModel.nodes && (
+        {selectedNodeId && currentModel?.nodes[selectedNodeId] && (
           <div className={`w-96 ${theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'} border-l shadow-xl`}>
             <NodeSettings
               theme={theme}

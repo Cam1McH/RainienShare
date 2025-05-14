@@ -79,67 +79,67 @@ export async function getUser(req?: unknown): Promise<User | null> {
   }
 }
 
-export async function createSession(userId: number) {
-  try {
-    // Clear existing sessions for this user
-    await db.query("DELETE FROM sessions WHERE userId = ?", [userId]);
+// export async function createSession(userId: number) {
+//   try {
+//     // Clear existing sessions for this user
+//     await db.query("DELETE FROM sessions WHERE userId = ?", [userId]);
 
-    // Create a new session
-    const sessionToken = crypto.randomBytes(32).toString("hex");
-    // We are using NOW() and checking the interval in getUser,
-    // so we don't strictly need an expiresAt column unless you want that model.
-    await db.query(
-      "INSERT INTO sessions (userId, token, createdAt) VALUES (?, ?, NOW())",
-      [userId, sessionToken]
-    );
+//     // Create a new session
+//     const sessionToken = crypto.randomBytes(32).toString("hex");
+//     // We are using NOW() and checking the interval in getUser,
+//     // so we don't strictly need an expiresAt column unless you want that model.
+//     await db.query(
+//       "INSERT INTO sessions (userId, token, createdAt) VALUES (?, ?, NOW())",
+//       [userId, sessionToken]
+//     );
 
-    // Set the session cookie
-    const cookieStore = cookies();
-    (await cookieStore).set("session", sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      sameSite: "lax",
-    });
+//     // Set the session cookie
+//     const cookieStore = cookies();
+//     (await cookieStore).set("session", sessionToken, {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       path: "/",
+//       maxAge: 60 * 60 * 24 * 7, // 7 days
+//       sameSite: "lax",
+//     });
 
-    return true;
-  } catch (error) {
-    console.error("Error creating session:", error);
-    return false;
-  }
-}
+//     return true;
+//   } catch (error) {
+//     console.error("Error creating session:", error);
+//     return false;
+//   }
+// }
 
-export async function destroySession() {
-  try {
-    const cookieStore = cookies();
-    const sessionToken = (await cookieStore).get("session")?.value;
+// export async function destroySession() {
+//   try {
+//     const cookieStore = cookies();
+//     const sessionToken = (await cookieStore).get("session")?.value;
 
-    if (sessionToken) {
-      // Find the session to get the userId before deleting
-      const [sessionRows] = await db.query(
-        `SELECT userId FROM sessions WHERE token = ? LIMIT 1`,
-        [sessionToken]
-      );
-      const session = (sessionRows as any[])[0];
+//     if (sessionToken) {
+//       // Find the session to get the userId before deleting
+//       const [sessionRows] = await db.query(
+//         `SELECT userId FROM sessions WHERE token = ? LIMIT 1`,
+//         [sessionToken]
+//       );
+//       const session = (sessionRows as any[])[0];
 
-      // Delete the specific session by token
-      await db.query("DELETE FROM sessions WHERE token = ?", [sessionToken]);
+//       // Delete the specific session by token
+//       await db.query("DELETE FROM sessions WHERE token = ?", [sessionToken]);
 
-      // Optionally, if you want to clear ALL sessions for that user on logout,
-      // you could add:
-      // if (session) {
-      //   await db.query("DELETE FROM sessions WHERE userId = ?", [session.userId]);
-      // }
-    }
+//       // Optionally, if you want to clear ALL sessions for that user on logout,
+//       // you could add:
+//       // if (session) {
+//       //   await db.query("DELETE FROM sessions WHERE userId = ?", [session.userId]);
+//       // }
+//     }
 
-    (await cookieStore).delete("session");
-    return true;
-  } catch (error) {
-    console.error("Error destroying session:", error);
-    return false;
-  }
-}
+//     (await cookieStore).delete("session");
+//     return true;
+//   } catch (error) {
+//     console.error("Error destroying session:", error);
+//     return false;
+//   }
+// }
 
 export async function requireAuth() {
   // Now requireAuth uses the integrated getUser function
@@ -151,3 +151,4 @@ export async function requireAuth() {
 
   return user;
 }
+

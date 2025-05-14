@@ -30,6 +30,7 @@ import {
   UpdateModelRequest,
   BotTemplate
 } from '@/lib/api/aiBuilderTypes';
+import { AIBuilderError } from '@/lib/errors/AIBuilderError';
 
 // Define a consistent return type for model creation
 export interface ModelCreateResult {
@@ -568,3 +569,29 @@ export function useAIBuilderContext() {
   }
   return context;
 }
+
+// Add this to src/lib/api/aiBuilder.ts or update the existing function
+
+export const getModelWithData = async (modelId: string, userId: string) => {
+  try {
+    // For debugging
+    console.log(`Getting model with ID: ${modelId} for user: ${userId}`);
+    
+    // Here you would normally query your database
+    // For now, return a placeholder model to help debug the issue
+    return {
+      id: modelId,
+      name: "Placeholder Model",
+      description: "This is a placeholder model for debugging",
+      nodes: {},
+      connections: [],
+      status: "draft",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      creator: userId
+    };
+  } catch (error) {
+    console.error(`Error in getModelWithData for model ${modelId}:`, error);
+    throw new AIBuilderError(`Failed to get model: ${(error as Error).message}`, 500);
+  }
+};

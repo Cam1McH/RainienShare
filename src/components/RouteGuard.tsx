@@ -1,18 +1,32 @@
-// components/RouteGuard.tsx
 "use client";
 
 import { useUser } from '@/providers/UserProvider';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function RouteGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useUser(); // Changed from useAuth to useUser
+  const { user, loading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Add a listener for a custom event that your login modal can trigger
+  useEffect(() => {
+    const handleModalOpen = () => setIsModalOpen(true);
+    const handleModalClose = () => setIsModalOpen(false);
+
+    window.addEventListener('loginModalOpen', handleModalOpen);
+    window.addEventListener('loginModalClose', handleModalClose);
+
+    return () => {
+      window.removeEventListener('loginModalOpen', handleModalOpen);
+      window.removeEventListener('loginModalClose', handleModalClose);
+    };
+  }, []);
 
   useEffect(() => {
-    // Auth is still loading, don't do anything yet
-    if (loading) return;
+    // Auth is still loading or modal is open, don't do anything yet
+    if (loading || isModalOpen) return;
 
     // Paths that don't require authentication
     const publicPaths = ['/', '/login', '/signup', '/forgot-password'];
@@ -22,20 +36,15 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
     // If not logged in and not on a public path, redirect to login
     if (!user && !isPublicPath) {
-      router.push(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
+      router.push(`/login?returnUrl=${encodeURIComponent(pathname)}`);
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isModalOpen]);
 
   // While checking authentication status, show a loading indicator
   if (loading) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
 
-  // If on a private path and not logged in, don't render children
-  if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
-    return null;
-  }
-
-  // Otherwise, render the children
+  // Always render children - your login modal will handle authentication when needed
   return <>{children}</>;
 }

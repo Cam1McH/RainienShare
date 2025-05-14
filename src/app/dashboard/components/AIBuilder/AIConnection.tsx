@@ -1,24 +1,183 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AIConnectionData, AINodeData } from './types';
+import { X } from 'lucide-react';
 
 interface AIConnectionProps {
   connection: AIConnectionData;
   nodes: Record<string, AINodeData>;
   theme: 'light' | 'dark';
   onDelete: () => void;
-  isBeingDragged?: boolean;
-  draggedEnd?: { x: number; y: number } | null;
+}
+
+// New component for creating a draggable connection
+interface DraggableConnectionProps {
+  sourceId: string;
+  endPoint: { x: number; y: number };
+  nodes: Record<string, AINodeData>;
+  theme: 'light' | 'dark';
+  hoveredNodeId?: string | null;
+}
+
+// Helper to get node connection points
+const getNodeConnectionPoints = (node: AINodeData) => {
+  return {
+    output: { x: node.x + 280, y: node.y + 50 }, // Right side middle
+    input: { x: node.x, y: node.y + 50 } // Left side middle
+  };
+};
+
+// Get node type colors with enhanced visibility
+const getNodeColor = (nodeType: string) => {
+  switch (nodeType) {
+    case 'input': return '#4f46e5'; // indigo
+    case 'process': return '#16a34a'; // green
+    case 'output': return '#8b5cf6'; // purple
+    case 'condition': return '#eab308'; // yellow
+    case 'data': return '#ea580c'; // orange
+    default: return '#6b7280'; // gray
+  }
+};
+
+export function DraggableConnection({
+  sourceId,
+  endPoint,
+  nodes,
+  theme,
+  hoveredNodeId
+}: DraggableConnectionProps) {
+  // Get source node
+  const sourceNode = nodes[sourceId];
+  if (!sourceId || !sourceNode) return null;
+  
+  // Get connection points
+  const sourcePoint = getNodeConnectionPoints(sourceNode).output;
+  
+  // If there's a hovered node, snap to its input point
+  let targetPoint = endPoint;
+  if (hoveredNodeId && nodes[hoveredNodeId]) {
+    targetPoint = getNodeConnectionPoints(nodes[hoveredNodeId]).input;
+  }
+  
+  // Get color based on node type
+  const color = getNodeColor(sourceNode.type);
+  
+  // Unique ID for this connection for proper styling
+  const connectionId = `drag-${sourceId}`;
+  
+  return (
+    <div style={{ 
+      position: 'absolute', 
+      top: 0, 
+      left: 0, 
+      width: '100%', 
+      height: '100%', 
+      pointerEvents: 'none',
+      zIndex: 1000
+    }}>
+      <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
+        <defs>
+          {/* Define gradient for animated flow */}
+          <linearGradient id={`gradient-${connectionId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.1" />
+            <stop offset="50%" stopColor={color} stopOpacity="0.8" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
+        
+        {/* Shadow path */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}
+          strokeWidth="6"
+          strokeLinecap="round"
+          transform="translate(2, 2)"
+        />
+        
+        {/* Main connection path with curve */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={hoveredNodeId ? "none" : "5,5"}
+          className="animate-dash"
+        />
+        
+        {/* Animated flow along path */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={`url(#gradient-${connectionId})`}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="5 15"
+          className="animate-dash"
+          style={{ animationDuration: '1s' }}
+        />
+        
+        {/* Source point */}
+        <circle
+          cx={sourcePoint.x}
+          cy={sourcePoint.y}
+          r="5"
+          fill={color}
+        />
+        
+        {/* Target point */}
+        <circle
+          cx={targetPoint.x}
+          cy={targetPoint.y}
+          r="5"
+          fill={color}
+          className={hoveredNodeId ? "animate-pulse" : ""}
+        />
+        
+        {/* Arrow head (positioned correctly on the line end) */}
+        {hoveredNodeId && (
+          <polygon
+            points={`${targetPoint.x-12},${targetPoint.y-6} ${targetPoint.x},${targetPoint.y} ${targetPoint.x-12},${targetPoint.y+6}`}
+            fill={color}
+          />
+        )}
+        
+        {/* Target node highlight */}
+        {hoveredNodeId && nodes[hoveredNodeId] && (
+          <rect
+            x={nodes[hoveredNodeId].x - 5}
+            y={nodes[hoveredNodeId].y - 5}
+            width="290"
+            height="110"
+            rx="10"
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeDasharray="5,5"
+            className="animate-pulse"
+          />
+        )}
+      </svg>
+    </div>
+  );
 }
 
 function AIConnection({ 
   connection, 
   nodes, 
   theme, 
-  onDelete,
-  isBeingDragged = false,
-  draggedEnd = null
+  onDelete
 }: AIConnectionProps) {
   const [hoverState, setHoverState] = useState(false);
   
@@ -30,182 +189,188 @@ function AIConnection({
   const sourceNode = nodes[connection.sourceId];
   const targetNode = nodes[connection.targetId];
   
-  // Calculate source point (right edge of source node)
-  const sourceX = sourceNode.x + 240;
-  const sourceY = sourceNode.y + 50;
+  // Get connection points
+  const sourcePoint = getNodeConnectionPoints(sourceNode).output;
+  const targetPoint = getNodeConnectionPoints(targetNode).input;
   
-  // Calculate target point (left edge of target node or dragged position)
-  let targetX: number;
-  let targetY: number;
+  // Get color based on node type
+  const color = getNodeColor(sourceNode.type);
   
-  if (isBeingDragged && draggedEnd) {
-    targetX = draggedEnd.x;
-    targetY = draggedEnd.y;
-  } else {
-    targetX = targetNode.x;
-    targetY = targetNode.y + 50;
-  }
+  // Calculate midpoint
+  const midX = (sourcePoint.x + targetPoint.x) / 2;
+  const midY = (sourcePoint.y + targetPoint.y) / 2;
   
-  // Calculate control points for bezier curve
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  // Control points for smooth curve
-  const controlPoint1X = sourceX + Math.min(distance * 0.5, 150);
-  const controlPoint1Y = sourceY;
-  const controlPoint2X = targetX - Math.min(distance * 0.5, 150);
-  const controlPoint2Y = targetY;
-  
-  const path = `M ${sourceX} ${sourceY} 
-                C ${controlPoint1X} ${controlPoint1Y}, 
-                  ${controlPoint2X} ${controlPoint2Y}, 
-                  ${targetX} ${targetY}`;
-  
-  // Calculate midpoint for delete button
-  const midX = sourceX + dx / 2;
-  const midY = sourceY + dy / 2;
-  
-  // Get connection color based on source node type
-  const getConnectionColor = () => {
-    const colors: Record<string, string> = {
-      input: '#3b82f6',
-      process: '#10b981',
-      output: '#8b5cf6',
-      condition: '#f59e0b',
-      data: '#f97316'
-    };
-    return colors[sourceNode.type] || '#6b7280';
-  };
-  
-  const color = getConnectionColor();
-  
-  // Animate connection when first created
-  const [pathLength, setPathLength] = useState(0);
-  
-  useEffect(() => {
-    // Simple path length calculation
-    const length = Math.sqrt(dx * dx + dy * dy);
-    setPathLength(length);
-  }, [dx, dy]);
+  // Unique ID for this connection
+  const connectionId = `conn-${connection.id}`;
   
   return (
-    <g 
-      onMouseEnter={() => setHoverState(true)}
-      onMouseLeave={() => setHoverState(false)}
+    <div 
+      className="connection-container"
+      style={{ 
+        position: 'absolute', 
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        height: '100%',
+        zIndex: 5,
+        pointerEvents: 'none'
+      }}
     >
-      {/* Shadow for depth */}
-      <path
-        d={path}
-        fill="none"
-        stroke="rgba(0,0,0,0.1)"
-        strokeWidth="3"
-        transform="translate(2, 2)"
-      />
-      
-      {/* Main connection path */}
-      <path
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={hoverState ? 3 : 2}
-        className="transition-all duration-200"
-        style={{
-          filter: hoverState ? `drop-shadow(0 0 4px ${color}40)` : 'none'
-        }}
-      />
-      
-      {/* Arrow marker */}
-      <defs>
-        <marker
-          id={`arrowhead-${connection.id}`}
-          markerWidth="12"
-          markerHeight="8"
-          refX="11"
-          refY="4"
-          orient="auto"
-          fill={color}
-        >
-          <path d="M 0 0 L 12 4 L 0 8 z" />
-        </marker>
-      </defs>
-      
-      {/* Arrow at the end */}
-      <path
-        d={`M ${targetX - 20} ${targetY} L ${targetX} ${targetY}`}
-        stroke={color}
-        strokeWidth="2"
-        fill="none"
-        markerEnd={`url(#arrowhead-${connection.id})`}
-      />
-      
-      {/* Connection type indicator */}
-      {hoverState && !isBeingDragged && (
-        <g transform={`translate(${midX}, ${midY - 20})`}>
-          <rect
-            x="-30"
-            y="-8"
-            width="60"
-            height="16"
-            rx="8"
-            fill={theme === 'dark' ? '#1a1a2c' : '#f8fafc'}
-            stroke={theme === 'dark' ? '#2a2a3c' : '#e2e8f0'}
-          />
-          <text
-            x="0"
-            y="4"
-            textAnchor="middle"
-            fontSize="10"
-            fill={color}
-            fontWeight="600"
+      <svg width="100%" height="100%" style={{ position: 'absolute', overflow: 'visible' }}>
+        <defs>
+          {/* Define gradient for animated flow */}
+          <linearGradient id={`gradient-${connectionId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.1" />
+            <stop offset="50%" stopColor={color} stopOpacity="0.8" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.1" />
+          </linearGradient>
+          
+          {/* Define arrow marker */}
+          <marker
+            id={`arrow-${connectionId}`}
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
           >
-            {sourceNode.type} → {targetNode.type}
-          </text>
-        </g>
-      )}
-      
-      {/* Delete button */}
-      {hoverState && !isBeingDragged && (
-        <g
-          className="cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          transform={`translate(${midX}, ${midY})`}
-        >
-          <circle
-            r="10"
-            fill={theme === "dark" ? "#13131f" : "white"}
-            stroke={theme === "dark" ? "#2a2a3c" : "#e2e8f0"}
-            strokeWidth="1"
-            className="drop-shadow-lg"
-          />
-          <text
-            x="0"
-            y="3"
-            textAnchor="middle"
-            fontSize="12"
-            fill="#ef4444"
-            fontWeight="600"
-          >
-            ×
-          </text>
-        </g>
-      )}
-      
-      {/* Snap indicator when dragging */}
-      {isBeingDragged && (
-        <circle
-          cx={targetX}
-          cy={targetY}
-          r="8"
-          fill={color}
-          opacity="0.5"
-          className="animate-pulse"
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
+          </marker>
+        </defs>
+        
+        {/* Invisible wider path for hover detection */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke="transparent"
+          strokeWidth="20"
+          style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+          onMouseEnter={() => setHoverState(true)}
+          onMouseLeave={() => setHoverState(false)}
         />
-      )}
-    </g>
+        
+        {/* Shadow path */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}
+          strokeWidth={hoverState ? "7" : "6"}
+          strokeLinecap="round"
+          transform="translate(2, 2)"
+        />
+        
+        {/* Main connection path with curve */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={hoverState ? "4" : "3"}
+          strokeLinecap="round"
+          style={{ filter: hoverState ? `drop-shadow(0 0 6px ${color}60)` : `drop-shadow(0 0 3px ${color}30)` }}
+        />
+        
+        {/* Animated flow along path */}
+        <path
+          d={`M ${sourcePoint.x} ${sourcePoint.y} 
+              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
+                ${targetPoint.x - 50} ${targetPoint.y}, 
+                ${targetPoint.x} ${targetPoint.y}`}
+          fill="none"
+          stroke={`url(#gradient-${connectionId})`}
+          strokeWidth={hoverState ? "4" : "3"}
+          strokeLinecap="round"
+          strokeDasharray="5 15"
+          className="animate-dash"
+          style={{ animationDuration: '1.5s' }}
+        />
+        
+        {/* Source point */}
+        <circle
+          cx={sourcePoint.x}
+          cy={sourcePoint.y}
+          r="4"
+          fill={color}
+        />
+        
+        {/* Target point */}
+        <circle
+          cx={targetPoint.x}
+          cy={targetPoint.y}
+          r="4"
+          fill={color}
+        />
+        
+        {/* Arrow marker */}
+        <path
+          d={`M ${targetPoint.x - 15} ${targetPoint.y} L ${targetPoint.x - 2} ${targetPoint.y}`}
+          stroke={color}
+          strokeWidth="3"
+          markerEnd={`url(#arrow-${connectionId})`}
+        />
+        
+        {/* Label and delete button - show on hover */}
+        {hoverState && (
+          <g>
+            <rect 
+              x={midX - 60}
+              y={midY - 20}
+              width="120"
+              height="40"
+              rx="20"
+              fill={theme === 'dark' ? '#1a1a2e' : '#ffffff'}
+              stroke={color}
+              strokeWidth="1.5"
+              style={{ pointerEvents: 'all' }}
+              filter={`drop-shadow(0 4px 8px rgba(0,0,0,0.15))`}
+            />
+            
+            <text
+              x={midX - 40}
+              y={midY}
+              fill={color}
+              fontSize="12"
+              style={{ pointerEvents: 'none', dominantBaseline: 'middle' }}
+            >
+              {sourceNode.type} → {targetNode.type}
+            </text>
+            
+            {/* Delete button */}
+            <circle
+              cx={midX + 30}
+              cy={midY}
+              r="15"
+              fill={theme === 'dark' ? '#1a1a2e' : '#ffffff'}
+              stroke={color}
+              strokeWidth="1.5"
+              style={{ pointerEvents: 'all', cursor: 'pointer' }}
+              onClick={(e) => {
+                if (e.stopPropagation) e.stopPropagation();
+                onDelete();
+              }}
+            />
+            
+            {/* Delete X icon */}
+            <path
+              d={`M ${midX + 25} ${midY - 5} L ${midX + 35} ${midY + 5} M ${midX + 35} ${midY - 5} L ${midX + 25} ${midY + 5}`}
+              stroke="#ef4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+              style={{ pointerEvents: 'none' }}
+            />
+          </g>
+        )}
+      </svg>
+    </div>
   );
 }
 

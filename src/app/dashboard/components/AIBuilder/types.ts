@@ -1,6 +1,8 @@
 export type AINodeType = 'input' | 'process' | 'output' | 'condition' | 'data';
 
 export interface AINodeData {
+  description: any;
+  description: ReactNode;
   type: AINodeType;
   x: number;
   y: number;

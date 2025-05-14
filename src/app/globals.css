@@ -62,3 +62,335 @@ body {
     transform: translateX(7px);
   }
 }
+
+@keyframes flowDash {
+  from {
+    stroke-dashoffset: 16;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-flow {
+  animation: flowDash 1.5s linear infinite;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+
+
+/* ==================================
+   Canvas and Grid Styles
+   ================================== */
+.ai-builder-canvas {
+  position: relative !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 500px !important;
+  cursor: grab !important;
+  background-color: #0c0c14 !important;
+  background-size: 40px 40px !important;
+  background-image: linear-gradient(rgba(128, 128, 255, 0.05) 1px, transparent 1px),
+                   linear-gradient(90deg, rgba(128, 128, 255, 0.05) 1px, transparent 1px) !important;
+}
+
+/* Canvas dragging state */
+.ai-builder-canvas.dragging {
+  cursor: grabbing !important;
+}
+
+/* Canvas content container */
+.transform-origin-top-left {
+  transform-origin: top left !important;
+  position: absolute !important;
+  min-width: 4000px !important;
+  min-height: 3000px !important;
+  pointer-events: none !important; /* Canvas itself shouldn't receive events */
+}
+
+/* Re-enable pointer events for children */
+.transform-origin-top-left > div {
+  pointer-events: auto !important;
+}
+
+/* ==================================
+   Node Styles
+   ================================== */
+.ai-node {
+  position: absolute !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  touch-action: none !important;
+  z-index: 10 !important;
+  cursor: grab !important;
+  box-sizing: border-box !important;
+  transition: transform 0.2s ease-out !important;
+}
+
+.ai-node.selected {
+  z-index: 20 !important;
+}
+
+.ai-node.dragging {
+  cursor: grabbing !important;
+  z-index: 30 !important;
+}
+
+/* Node container */
+.ai-node > div {
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.ai-node > div:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.ai-node.selected > div {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Node header */
+.ai-node .bg-gradient-to-r {
+  cursor: move !important;
+  padding: 0.625rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* ==================================
+   Connection Port Styles
+   ================================== */
+.connection-port {
+  position: absolute !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  cursor: crosshair !important;
+  z-index: 30 !important;
+  pointer-events: auto !important;
+  border-width: 2px !important;
+  border-style: solid !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.connection-port:hover {
+  transform: scale(1.2) !important;
+}
+
+/* Inner dot in connection port */
+.connection-port > div {
+  position: absolute !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* ==================================
+   Connection Styles
+   ================================== */
+.connection-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}
+
+.connection-container svg {
+  overflow: visible !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Connection path hover detection */
+.connection-container svg path[stroke="transparent"] {
+  pointer-events: stroke !important;
+  cursor: pointer !important;
+}
+
+/* Connection text */
+.connection-container svg text {
+  pointer-events: none !important;
+  user-select: none !important;
+  dominant-baseline: middle !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 12px !important;
+}
+
+/* ==================================
+   Button and Action Styles
+   ================================== */
+.node-action {
+  cursor: pointer !important;
+  z-index: 40 !important;
+  background: transparent !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.375rem !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.15s ease !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.node-action:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* ==================================
+   Animation Styles
+   ================================== */
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1; 
+  }
+  50% { 
+    opacity: 0.6; 
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 20;
+  }
+}
+
+.animate-dash {
+  animation: dash 1.5s linear infinite !important;
+}
+
+/* ==================================
+   Helpers and Utilities
+   ================================== */
+.cursor-grab {
+  cursor: grab !important;
+}
+
+.cursor-grabbing {
+  cursor: grabbing !important;
+}
+
+.cursor-crosshair {
+  cursor: crosshair !important;
+}
+
+/* ==================================
+   Dark Theme Specific Styles
+   ================================== */
+.dark .ai-node > div {
+  background-color: #13131f !important;
+  border-color: #2a2a3c !important;
+}
+
+.dark .ai-node.selected > div {
+  border-color: inherit !important;
+}
+
+.dark .connection-port {
+  background-color: #13131f !important;
+}
+
+/* ==================================
+   Control Panel Styles
+   ================================== */
+.controls-panel {
+  position: absolute !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  background: rgba(19, 19, 31, 0.8) !important;
+  border: 1px solid #2a2a3c !important;
+  border-radius: 0.75rem !important;
+  padding: 0.25rem !important;
+  display: flex !important;
+  gap: 0.25rem !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 100 !important;
+}
+
+/* ==================================
+   Minimap Styles
+   ================================== */
+.mini-map {
+  position: absolute !important;
+  bottom: 20px !important;
+  left: 20px !important;
+  width: 200px !important;
+  height: 150px !important;
+  background: rgba(19, 19, 31, 0.8) !important;
+  border: 1px solid #2a2a3c !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 100 !important;
+}
+
+.viewport-indicator {
+  position: absolute !important;
+  border: 1px solid #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+}
+
+/* ==================================
+   Critical Fixes for Dragging
+   ================================== */
+/* Fix to ensure event propagation works correctly */
+.ai-node, .connection-port, .node-action {
+  pointer-events: auto !important; 
+}
+
+/* Set appropriate z-indices */
+.ai-node {
+  z-index: 10 !important;
+}
+
+.ai-node.selected {
+  z-index: 20 !important; 
+}
+
+.connection-port {
+  z-index: 30 !important;
+}
+
+.node-action {
+  z-index: 40 !important;
+}
+
+.connection-container {
+  z-index: 5 !important;
+}
+
+/* Critical fix for proper touch events on mobile */
+.ai-node, .connection-port, .transform-origin-top-left {
+  touch-action: none !important;
+}

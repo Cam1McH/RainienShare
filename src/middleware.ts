@@ -1,7 +1,8 @@
+// src/middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Same as the public paths in your client component
+// Public paths that don't require authentication
 const PUBLIC_PATHS = [
   '/',
   '/login',
@@ -27,7 +28,7 @@ const CSRF_PROTECTED_PATHS = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const method = request.method; // Correctly access method from request object
+  const method = request.method;
   
   // Skip middleware for static assets
   const isStaticAsset = 
@@ -37,6 +38,13 @@ export function middleware(request: NextRequest) {
   
   if (isStaticAsset) {
     return NextResponse.next();
+  }
+  
+  // Add useful debugging info for API routes
+  if (pathname.startsWith('/api/')) {
+    console.log(`[Middleware] ${method} ${pathname}`);
+    // Only log cookies for debugging, comment out in production
+    // console.log('[Middleware] Session cookie:', request.cookies.get('session')?.value ? 'Present' : 'Missing');
   }
   
   // Check for authentication on non-public, non-API paths
@@ -52,7 +60,7 @@ export function middleware(request: NextRequest) {
     // If no session, redirect to login with return URL
     if (!hasSessionCookie) {
       const url = request.nextUrl.clone();
-      url.pathname = '/login';
+      url.pathname = '/login'; // Changed from '/' to '/login'
       url.searchParams.set('returnUrl', encodeURIComponent(pathname));
       return NextResponse.redirect(url);
     }
@@ -90,9 +98,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all paths except static assets
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

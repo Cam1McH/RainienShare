@@ -1,16 +1,11 @@
-// src/app/api/aimodels/[id]/route.ts
+// src/app/api/aimodels/[id]/route.ts - Fix for params warning
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/serverAuth';
-// Fix: Import from the client module where deleteModel actually exists
-import { 
-  getModel as getModelWithData, 
-  updateModel, 
-  deleteModel 
-} from '@/lib/api/aiBuilderClient';
+import { getModelWithData, updateModel, deleteModel } from '@/lib/api/aiBuilder';
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get user from session
@@ -19,11 +14,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Await params before accessing
-    const params = await context.params;
+    // Access params.id directly
     const modelId = params.id;
     
-    // Validate modelId before passing to database
+    // Validate modelId
     if (!modelId || modelId === 'undefined' || modelId === 'null') {
       return NextResponse.json(
         { error: 'Invalid model ID' },
@@ -31,10 +25,21 @@ export async function GET(
       );
     }
     
+    console.log(`API route: Getting model ${modelId} for user ${user.id}`);
+    
     // Get model from database with proper error handling
     try {
-      const result = await getModelWithData(modelId);
-      return NextResponse.json(result);
+      // Pass the user ID to ensure authorization
+      const model = await getModelWithData(modelId, user.id.toString());
+      
+      if (!model) {
+        return NextResponse.json(
+          { error: 'Model not found' },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json({ model });
     } catch (error: any) {
       console.error('Error fetching AI model:', error);
       
@@ -46,8 +51,15 @@ export async function GET(
         );
       }
       
+      if (error.message?.includes('permission') || error.statusCode === 403) {
+        return NextResponse.json(
+          { error: 'You do not have permission to access this model' },
+          { status: 403 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to fetch model' },
+        { error: 'Failed to fetch model', details: error.message },
         { status: error.statusCode || 500 }
       );
     }
@@ -62,10 +74,10 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    console.log('Received PUT request for model'); // Add logging
+    console.log('Received PUT request for model');
 
     // Get user from session
     const user = await getServerUser();
@@ -74,8 +86,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Await params before accessing
-    const params = await context.params;
     const modelId = params.id;
     
     // Validate modelId
@@ -87,24 +97,44 @@ export async function PUT(
     }
     
     // Parse request body
-    const data = await req.json();
-    console.log('Request data:', data); // Log request data
+    let data;
+    try {
+      data = await req.json();
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
     
-    if (!data.name && !data.description && !data.status && !data.nodes && !data.connections) {
-      return NextResponse.json({ error: 'No valid update data provided' }, { status: 400 });
+    console.log('Request data:', data);
+    
+    if (!data || typeof data !== 'object') {
+      return NextResponse.json(
+        { error: 'Invalid request data' },
+        { status: 400 }
+      );
     }
     
     // Update the model
-    await updateModel(modelId, data);
-    
-    return NextResponse.json({ 
-      success: true,
-      message: 'Model updated successfully' 
-    });
-  } catch (error) {
+    try {
+      const success = await updateModel(modelId, user.id.toString(), data);
+      
+      return NextResponse.json({ 
+        success: true,
+        message: 'Model updated successfully' 
+      });
+    } catch (updateError: any) {
+      console.error('Error updating model:', updateError);
+      return NextResponse.json(
+        { error: 'Failed to update model', details: updateError.message || String(updateError) },
+        { status: 500 }
+      );
+    }
+  } catch (error: any) {
     console.error('Error updating AI model:', error);
     return NextResponse.json(
-      { error: 'Failed to update model', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to update model', details: error.message || String(error) },
       { status: 500 }
     );
   }
@@ -112,7 +142,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get user from session
@@ -121,8 +151,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Await params before accessing
-    const params = await context.params;
     const modelId = params.id;
     
     // Validate modelId
@@ -134,16 +162,24 @@ export async function DELETE(
     }
     
     // Delete the model
-    await deleteModel(modelId);
-    
-    return NextResponse.json({ 
-      success: true,
-      message: 'Model deleted successfully' 
-    });
-  } catch (error) {
+    try {
+      const result = await deleteModel(modelId, user.id.toString());
+      
+      return NextResponse.json({ 
+        success: result,
+        message: 'Model deleted successfully' 
+      });
+    } catch (deleteError: any) {
+      console.error('Error during model deletion process:', deleteError);
+      return NextResponse.json(
+        { error: 'Failed to delete model', details: deleteError.message || String(deleteError) },
+        { status: 500 }
+      );
+    }
+  } catch (error: any) {
     console.error('Error deleting AI model:', error);
     return NextResponse.json(
-      { error: 'Failed to delete model' },
+      { error: 'Failed to delete model', details: error.message || String(error) },
       { status: 500 }
     );
   }
