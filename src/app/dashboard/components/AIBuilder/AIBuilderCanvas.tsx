@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useRef, useEffect, forwardRef, ReactNode } from 'react';
+
+import React, { useState, useEffect, forwardRef, ReactNode } from 'react';
 
 interface AIBuilderCanvasProps {
   theme: 'light' | 'dark';
@@ -15,15 +16,11 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
     const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
     const [startCanvasPos, setStartCanvasPos] = useState({ x: 0, y: 0 });
     
-    const canvasRef = useRef<HTMLDivElement>(null);
-    
     // Handle mouse wheel for zooming
     const handleWheel = (e: React.WheelEvent) => {
       e.preventDefault();
       
-      if (!canvasRef.current) return;
-      
-      const rect = canvasRef.current.getBoundingClientRect();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
@@ -49,6 +46,7 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
     const handleMouseDown = (e: React.MouseEvent) => {
       // Only start dragging if not clicking on a node
       if ((e.target as HTMLElement).closest('.ai-node')) return;
+      if ((e.target as HTMLElement).closest('.connection-port')) return;
       
       setIsDragging(true);
       setStartDragPos({ x: e.clientX, y: e.clientY });
@@ -100,7 +98,7 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
     
     return (
       <div
-        ref={canvasRef}
+        ref={ref}
         className={`ai-builder-canvas ${theme} w-full h-full overflow-hidden relative cursor-grab ${
           isDragging ? 'cursor-grabbing' : ''
         }`}
@@ -141,27 +139,6 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
           theme === 'dark' ? 'bg-[#13131f]/80 border-[#2a2a3c] text-gray-300' : 'bg-white/80 border-gray-200 text-gray-700'
         } border backdrop-blur-sm`}>
           {Math.round(scale * 100)}%
-        </div>
-        
-        {/* Mini-map (optional) */}
-        <div className={`absolute bottom-4 left-4 w-48 h-32 rounded-lg overflow-hidden ${
-          theme === 'dark' ? 'bg-[#13131f]/80 border-[#2a2a3c]' : 'bg-white/80 border-gray-200'
-        } border backdrop-blur-sm`}>
-          <div className="relative w-full h-full">
-            <div 
-              className={`absolute ${
-                theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-400/20'
-              } border ${
-                theme === 'dark' ? 'border-blue-400' : 'border-blue-500'
-              }`}
-              style={{
-                left: `${(position.x / 4000) * 100}%`,
-                top: `${(position.y / 3000) * 100}%`,
-                width: `${(window.innerWidth / 4000) * 100}%`,
-                height: `${(window.innerHeight / 3000) * 100}%`,
-              }}
-            />
-          </div>
         </div>
       </div>
     );

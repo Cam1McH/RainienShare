@@ -16,7 +16,6 @@ interface AINodeProps {
   onStartConnection: (sourceId: string) => void;
   onEndConnection: (targetId: string) => void;
   setIsDragging: (isDragging: boolean) => void;
-  onConnectionDrag?: (sourceId: string, mousePos: { x: number; y: number }) => void;
   onMoveComplete?: () => void;
 }
 
@@ -32,12 +31,10 @@ function AINode({
   onStartConnection,
   onEndConnection,
   setIsDragging,
-  onConnectionDrag,
   onMoveComplete
 }: AINodeProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isDraggingNode, setIsDraggingNode] = useState(false);
-  const [isDraggingConnection, setIsDraggingConnection] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [expanded, setExpanded] = useState(true);
   
@@ -182,20 +179,22 @@ function AINode({
     };
   }, [isDraggingNode]);
   
-  // Connection handling
-  const handleConnectionStart = (e: React.MouseEvent, isOutput: boolean) => {
+  // Handle connection from output port (right side)
+  const handleStartConnectionFromOutputPort = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    onSelect(); // Select this node
-    
-    if (isOutput) {
-      onStartConnection(id);
-    } else {
-      // Input port handling can be added here
-    }
+    console.log("Starting connection from output port", id);
+    onStartConnection(id);
   };
   
+  // Handle connection to input port (left side)
+  const handleReceiveConnectionToInputPort = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Receiving connection at input port", id);
+    onEndConnection(id);
+  };
+
   return (
     <div
       ref={nodeRef}
@@ -350,19 +349,16 @@ function AINode({
           className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2"
         >
           <div
-            className="connection-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
+            className="connection-port input-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
             style={{
               backgroundColor: theme === 'dark' ? '#13131f' : 'white',
               borderColor: nodeStyles.accent,
               borderWidth: '2px',
               boxShadow: `0 2px 4px rgba(0,0,0,0.1), 0 0 8px ${nodeStyles.accent}40`
             }}
-            onMouseDown={(e) => {
-              e.stopPropagation(); // Important - prevent node drag
-              // For input ports, we can either do nothing or handle differently
-              // If we want bi-directional connections, we could also start a connection:
-              // onStartConnection(id);
-            }}
+            data-node-id={id}
+            data-port-type="input"
+            onClick={handleReceiveConnectionToInputPort}
           >
             <div
               className="h-2 w-2 rounded-full"
@@ -376,17 +372,16 @@ function AINode({
           className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2"
         >
           <div
-            className="connection-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
+            className="connection-port output-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
             style={{
               backgroundColor: theme === 'dark' ? '#13131f' : 'white',
               borderColor: nodeStyles.accent,
               borderWidth: '2px',
               boxShadow: `0 2px 4px rgba(0,0,0,0.1), 0 0 8px ${nodeStyles.accent}40`
             }}
-            onMouseDown={(e) => {
-              e.stopPropagation(); // Important - prevent node drag
-              onStartConnection(id);
-            }}
+            data-node-id={id}
+            data-port-type="output"
+            onClick={handleStartConnectionFromOutputPort}
           >
             <div
               className="h-2 w-2 rounded-full"

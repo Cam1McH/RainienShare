@@ -1,20 +1,16 @@
-// src/app/dashboard/components/AIBuilder/AIBuilder.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAIBuilderContext } from '../../contexts/AIBuilderContext';
+import React, { useState, useEffect } from 'react';
 import AIBuilderCanvas from './AIBuilderCanvas';
 import AIModelHeader from './AIModelHeader';
 import AINode from './AINode';
-import AIConnection from './AIConnection';
+import AIConnection, { DraggableConnection } from './AIConnection';
 import NodePanel from './NodePanel';
 import NodeSettings from './NodeSettings';
 import AIPreview from './AIPreview';
 import InteractiveTutorial from './InteractiveTutorial';
 import { AINodeData, AIConnectionData, AINodeType } from './types';
 import { Plus } from 'lucide-react';
-import { AINodeData as ApiNodeData } from '@/lib/api/aiBuilderTypes';
 
 interface AIBuilderProps {
   theme: 'light' | 'dark';
@@ -23,45 +19,10 @@ interface AIBuilderProps {
 }
 
 const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId }) => {
-  const router = useRouter();
-  const {
-    currentModel,
-    createModel,
-    updateModel,
-    fetchModel,
-    saveModel,
-    addNode,
-    updateNodeData,
-    removeNodes,
-    addConnection,
-    removeConnections,
-    isLoading,
-    error,
-  } = useAIBuilderContext();
-
-const adaptNodeForComponent = (node: any): any => {
-  return {
-    ...node,
-    // Convert string type to enum if needed
-    type: typeof node.type === 'string' 
-      ? node.type as unknown as AINodeType 
-      : node.type
-  };
-};
-
-const adaptNodesForComponent = (nodes: Record<string, any>): any => {
-  const adaptedNodes: Record<string, any> = {};
-  
-  Object.entries(nodes).forEach(([nodeId, node]) => {
-    adaptedNodes[nodeId] = adaptNodeForComponent(node);
-  });
-  
-  return adaptedNodes;
-};
-
-
-  // Local state for UI
+  // State management
   const [modelName, setModelName] = useState('My AI Assistant');
+  const [nodes, setNodes] = useState<Record<string, AINodeData>>({});
+  const [connections, setConnections] = useState<AIConnectionData[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showNodePanel, setShowNodePanel] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -69,263 +30,273 @@ const adaptNodesForComponent = (nodes: Record<string, any>): any => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [canvasScale, setCanvasScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
-  const [connecting, setConnecting] = useState<{
-    sourceId: string;
-  } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   
-  // Track node positions locally for immediate updates
-  const [localNodePositions, setLocalNodePositions] = useState<Record<string, { x: number; y: number }>>({});
-  
-  // Use ref to track if model is already loaded
-  const isModelLoaded = useRef(false);
-const prevModelId = useRef<string | undefined>(undefined);
-const loadAttempted = useRef(false);
+  // Connection state
+  const [connecting, setConnecting] = useState<{ sourceId: string } | null>(null);
+  const [connectionEndpoint, setConnectionEndpoint] = useState({ x: 0, y: 0 });
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-// Load model data only when modelId changes and hasn't been loaded yet
-useEffect(() => {
-  // Skip if no model ID is provided or if we've already attempted loading this model
-  if (!modelId || (loadAttempted.current && prevModelId.current === modelId)) {
-    return;
-  }
+  // History management
+  const [history, setHistory] = useState<{
+    nodes: Record<string, AINodeData>;
+    connections: AIConnectionData[];
+  }[]>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
 
-  const loadModel = async () => {
-    if (modelId && (!isModelLoaded.current || prevModelId.current !== modelId)) {
-      // Update tracking state before fetch to prevent multiple attempts
-      loadAttempted.current = true;
-      prevModelId.current = modelId;
-      
-      try {
-        console.log(`AIBuilder: Loading model ${modelId}`);
-        const model = await fetchModel(modelId);
-        
-        if (model) {
-          console.log(`AIBuilder: Model loaded successfully`, model.id);
-          setModelName(model.name || 'Untitled Model');
-          isModelLoaded.current = true;
-          
-          // Initialize local positions from model data
-          const initialPositions: Record<string, { x: number; y: number }> = {};
-          
-          // Handle potential undefined or missing nodes
-          if (model.nodes) {
-            Object.entries(model.nodes).forEach(([nodeId, node]) => {
-              if (node && typeof node.x === 'number' && typeof node.y === 'number') {
-                initialPositions[nodeId] = { x: node.x, y: node.y };
-              } else {
-                // Handle missing or invalid position data
-                initialPositions[nodeId] = { 
-                  x: 200 + Math.random() * 200, 
-                  y: 200 + Math.random() * 200 
-                };
-                console.warn(`Node ${nodeId} has invalid position data. Using random position.`);
-              }
-            });
-          }
-          
-          setLocalNodePositions(initialPositions);
-        } else {
-          console.error(`AIBuilder: Model is null or undefined`);
-        }
-      } catch (error) {
-        console.error('AIBuilder: Failed to load model:', error);
-        
-        // Clear loading flag to allow retrying on component remount
-        isModelLoaded.current = false;
-        
-        // Set error state if provided by parent component
-      }
-    }
-  };
-
-  loadModel();
-  
-  // Reset loading state if component unmounts or modelId changes
-  return () => {
-    if (prevModelId.current !== modelId) {
-      loadAttempted.current = false;
-    }
-  };
-}, [modelId, fetchModel]); // Keep dependencies minimal
-
-  // Update model name when currentModel changes (only once)
+  // Initialize with welcome nodes
   useEffect(() => {
-    if (currentModel && currentModel.name !== modelName) {
-      setModelName(currentModel.name);
-    }
-  }, [currentModel?.id, currentModel?.name]);
-
-  // Save model function
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      
-      if (!currentModel) {
-        // Create new model
-        const newModelData = {
-          name: modelName,
-          description: '',
-          nodes: {},
-          connections: [],
-          type: 'chatbot',
-          status: 'draft',
-        };
-        
-        const result = await createModel(newModelData);
-        if (result?.id) {
-          // Navigate to the new model
-          router.push(`/dashboard?modelId=${result.id}`);
+    const initialNodes: Record<string, AINodeData> = {
+      'start-node': {
+        type: 'process',
+        x: 300,
+        y: 250,
+        title: 'First Message',
+        description: 'Initial greeting sent to users',
+        data: {
+          operation: 'first_message',
+          welcomeMessage: 'Hello! How can I assist you today?'
         }
-      } else {
-        // Apply local positions to model data before saving
-        const updatedNodes = {...currentModel.nodes};
-        Object.entries(localNodePositions).forEach(([nodeId, pos]) => {
-          if (updatedNodes[nodeId]) {
-            updatedNodes[nodeId] = {
-              ...updatedNodes[nodeId],
-              x: pos.x,
-              y: pos.y
-            };
-          }
-        });
-        
-        const success = await saveModel();
-        if (success) {
-          // Update model name if changed
-          if (currentModel.name !== modelName) {
-            await updateModel(currentModel.id, { name: modelName });
-          }
+      },
+      'response-node': {
+        type: 'output',
+        x: 650,
+        y: 250,
+        title: 'Text Response',
+        description: 'Send messages to users',
+        data: {
+          outputType: 'text'
         }
       }
-    } catch (error) {
-      console.error('Error saving model:', error);
-    } finally {
-      setIsSaving(false);
+    };
+
+    const initialConnections: AIConnectionData[] = [{
+      id: 'initial-connection',
+      sourceId: 'start-node',
+      targetId: 'response-node'
+    }];
+
+    setNodes(initialNodes);
+    setConnections(initialConnections);
+    saveToHistory(initialNodes, initialConnections);
+  }, []);
+
+  // History functions
+  const saveToHistory = (nodes: Record<string, AINodeData>, connections: AIConnectionData[]) => {
+    const newHistory = [...history.slice(0, currentHistoryIndex + 1), { nodes, connections }];
+    setHistory(newHistory);
+    setCurrentHistoryIndex(newHistory.length - 1);
+  };
+
+  const undo = () => {
+    if (currentHistoryIndex > 0) {
+      const prevIndex = currentHistoryIndex - 1;
+      setCurrentHistoryIndex(prevIndex);
+      setNodes(history[prevIndex].nodes);
+      setConnections(history[prevIndex].connections);
     }
   };
 
-  // Handle adding nodes
-const handleAddNode = async (type: AINodeType, data: any) => {
-  if (!currentModel) return;
+  const redo = () => {
+    if (currentHistoryIndex < history.length - 1) {
+      const nextIndex = currentHistoryIndex + 1;
+      setCurrentHistoryIndex(nextIndex);
+      setNodes(history[nextIndex].nodes);
+      setConnections(history[nextIndex].connections);
+    }
+  };
 
-  const nodeId = await addNode({
-    type: type.toString(), // Convert enum to string for API
-    title: data.title || type.toString(),
-    description: data.description || '', // Include description
-    x: 400 + Math.random() * 100 - 50,
-    y: 300 + Math.random() * 100 - 50,
-    data: { ...data, skillLevel: data.skillLevel || 1 }
-  });
-
-  if (nodeId) {
-    setShowNodePanel(false);
-  }
-};
-
-  // Handle node movement with immediate visual feedback
-  const handleNodeMove = async (nodeId: string, x: number, y: number) => {
-    // Update local position immediately for UI responsiveness
-    setLocalNodePositions(prev => ({
-      ...prev,
-      [nodeId]: { x, y }
-    }));
+  // Node operations
+  const handleAddNode = (type: AINodeType, data: any) => {
+    const newId = `${type}-${Date.now()}`;
     
-    // Debounce server updates
-    clearTimeout((window as any)[`nodeMove_${nodeId}`]);
-    (window as any)[`nodeMove_${nodeId}`] = setTimeout(async () => {
-      await updateNodeData(nodeId, { x, y });
-    }, 100);
+    // Add random offset to prevent exact overlap
+    const randomOffset = () => Math.random() * 100 - 50;
+    
+    const newNode: AINodeData = {
+      type,
+      x: 400 + randomOffset(),
+      y: 300 + randomOffset(),
+      title: data.title || type.charAt(0).toUpperCase() + type.slice(1),
+      description: data.description || '',
+      data: { ...data, skillLevel: data.skillLevel || 1 }
+    };
+
+    const newNodes = { ...nodes, [newId]: newNode };
+    setNodes(newNodes);
+    saveToHistory(newNodes, connections);
+    setShowNodePanel(false);
   };
 
-  // Handle node movement completion
-  const handleNodeMoveComplete = async (nodeId: string) => {
-    // Ensure final position is saved
-    const finalPosition = localNodePositions[nodeId];
-    if (finalPosition) {
-      await updateNodeData(nodeId, { x: finalPosition.x, y: finalPosition.y });
-    }
+  const handleNodeMove = (nodeId: string, x: number, y: number) => {
+    const newNodes = {
+      ...nodes,
+      [nodeId]: {
+        ...nodes[nodeId],
+        x,
+        y
+      }
+    };
+    setNodes(newNodes);
   };
 
-  // Handle node deletion
-  const handleNodeDelete = async (nodeId: string) => {
-    if (!currentModel) return;
+  const handleNodeMoveComplete = () => {
+    saveToHistory(nodes, connections);
+  };
 
-    const success = await removeNodes([nodeId]);
-    if (success && selectedNodeId === nodeId) {
+  const handleNodeDelete = (nodeId: string) => {
+    const newNodes = { ...nodes };
+    delete newNodes[nodeId];
+    
+    const newConnections = connections.filter(
+      conn => conn.sourceId !== nodeId && conn.targetId !== nodeId
+    );
+    
+    setNodes(newNodes);
+    setConnections(newConnections);
+    saveToHistory(newNodes, newConnections);
+    
+    if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
     }
   };
 
-  // Handle connection creation
+  // Connection operations
   const handleStartConnection = (sourceId: string) => {
+    console.log("Starting connection from", sourceId);
     setConnecting({ sourceId });
-  };
-
-  const handleEndConnection = async (targetId: string) => {
-    if (!connecting || !currentModel) {
-      setConnecting(null);
-      return;
+    
+    // Initial connection endpoint
+    const sourceNode = nodes[sourceId];
+    if (sourceNode) {
+      setConnectionEndpoint({
+        x: sourceNode.x + 280, // Right side of node
+        y: sourceNode.y + 50   // Middle of node height
+      });
     }
-
-    if (connecting.sourceId !== targetId) {
-      const connectionId = await addConnection(connecting.sourceId, targetId);
-      if (!connectionId) {
-        // Handle error
+    
+    // Set up mouse tracking
+    const handleMouseMove = (e: MouseEvent) => {
+      const canvas = document.querySelector('.ai-builder-canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Update connection endpoint
+        setConnectionEndpoint({ x: mouseX, y: mouseY });
+        
+        // Check if hovering over an input port
+        const elementsAtPoint = document.elementsFromPoint(e.clientX, e.clientY);
+        let foundTargetNode = null;
+        
+        for (const element of elementsAtPoint) {
+          if (element.classList.contains('input-port')) {
+            const nodeId = element.getAttribute('data-node-id');
+            if (nodeId && nodeId !== sourceId) {
+              foundTargetNode = nodeId;
+              break;
+            }
+          }
+        }
+        
+        setHoveredNodeId(foundTargetNode);
       }
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      // Complete connection if over a valid target
+      if (hoveredNodeId && hoveredNodeId !== sourceId) {
+        handleEndConnection(hoveredNodeId);
+      } else {
+        // Check directly if we're over an input port
+        const elementsAtPoint = document.elementsFromPoint(e.clientX, e.clientY);
+        for (const element of elementsAtPoint) {
+          if (element.classList.contains('input-port')) {
+            const nodeId = element.getAttribute('data-node-id');
+            if (nodeId && nodeId !== sourceId) {
+              handleEndConnection(nodeId);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Clean up
+      setConnecting(null);
+      setHoveredNodeId(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+  
+  const handleEndConnection = (targetId: string) => {
+    console.log("Ending connection at", targetId);
+    if (connecting && connecting.sourceId !== targetId) {
+      const newConnection: AIConnectionData = {
+        id: `conn-${Date.now()}`,
+        sourceId: connecting.sourceId,
+        targetId
+      };
+      
+      const newConnections = [...connections, newConnection];
+      setConnections(newConnections);
+      saveToHistory(nodes, newConnections);
+      console.log(`Connection created: ${connecting.sourceId} → ${targetId}`);
     }
+    
     setConnecting(null);
+    setHoveredNodeId(null);
   };
 
-  // Handle connection deletion
-  const handleDeleteConnection = async (connectionId: string) => {
-    if (!currentModel) return;
-
-    await removeConnections([connectionId]);
+  const handleDeleteConnection = (connectionId: string) => {
+    const newConnections = connections.filter(conn => conn.id !== connectionId);
+    setConnections(newConnections);
+    saveToHistory(nodes, newConnections);
   };
 
-  // Handle node data updates
-  const handleUpdateNodeData = async (data: any) => {
-    if (!selectedNodeId || !currentModel?.nodes[selectedNodeId]) return;
-
-    await updateNodeData(selectedNodeId, {
-      ...currentModel.nodes[selectedNodeId],
-      data: { ...currentModel.nodes[selectedNodeId].data, ...data }
-    });
+  // Node settings
+  const handleUpdateNodeData = (data: any) => {
+    if (selectedNodeId && nodes[selectedNodeId]) {
+      const newNodes = {
+        ...nodes,
+        [selectedNodeId]: {
+          ...nodes[selectedNodeId],
+          data: { ...nodes[selectedNodeId].data, ...data }
+        }
+      };
+      setNodes(newNodes);
+      saveToHistory(newNodes, connections);
+    }
   };
 
-  // Handle node title updates
-  const handleUpdateNodeTitle = async (title: string) => {
-    if (!selectedNodeId || !currentModel?.nodes[selectedNodeId]) return;
-
-    await updateNodeData(selectedNodeId, {
-      ...currentModel.nodes[selectedNodeId],
-      title
-    });
+  const handleUpdateNodeTitle = (title: string) => {
+    if (selectedNodeId && nodes[selectedNodeId]) {
+      const newNodes = {
+        ...nodes,
+        [selectedNodeId]: {
+          ...nodes[selectedNodeId],
+          title
+        }
+      };
+      setNodes(newNodes);
+      saveToHistory(newNodes, connections);
+    }
   };
 
-  if (isLoading && !currentModel) {
-    return (
-      <div className={`fixed inset-0 z-50 ${theme === 'dark' ? 'bg-[#0a0a14]' : 'bg-gray-50'} flex items-center justify-center`}>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`fixed inset-0 z-50 ${theme === 'dark' ? 'bg-[#0a0a14]' : 'bg-gray-50'} flex items-center justify-center`}>
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
-          <button
-            onClick={closeAIBuilder}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg"
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Save model
+  const handleSave = async () => {
+    const modelData = {
+      name: modelName,
+      nodes,
+      connections
+    };
+    
+    console.log('Saving model:', modelData);
+    // Implement actual save functionality here
+  };
 
   return (
     <div className={`fixed inset-0 z-50 ${theme === 'dark' ? 'bg-[#0a0a14]' : 'bg-gray-50'}`}>
@@ -341,11 +312,11 @@ const handleAddNode = async (type: AINodeType, data: any) => {
         onShowTutorial={() => setShowTutorial(true)}
         onTogglePreview={() => setShowPreview(!showPreview)}
         history={{
-          canUndo: false, // Implement undo/redo logic if needed
-          canRedo: false
+          canUndo: currentHistoryIndex > 0,
+          canRedo: currentHistoryIndex < history.length - 1
         }}
-        undo={() => {}}
-        redo={() => {}}
+        undo={undo}
+        redo={redo}
       />
 
       {/* Main builder area */}
@@ -357,60 +328,44 @@ const handleAddNode = async (type: AINodeType, data: any) => {
             onClose={closeAIBuilder}
           >
             {/* Nodes */}
-            {currentModel && Object.entries(currentModel.nodes).map(([nodeId, node]) => {
-              // Use local position if available, otherwise use node position
-              const position = localNodePositions[nodeId] || { x: node.x, y: node.y };
-              
-              return (
-                <AINode
-                  key={nodeId}
-                  id={nodeId}
-                  node={{
-                    ...node,
-                    x: position.x,
-                    y: position.y
-                  }}
-                  theme={theme}
-                  isSelected={selectedNodeId === nodeId}
-                  canvasScale={canvasScale}
-                  onSelect={() => setSelectedNodeId(nodeId)}
-                  onMove={(x, y) => handleNodeMove(nodeId, x, y)}
-                  onDelete={() => handleNodeDelete(nodeId)}
-                  onStartConnection={handleStartConnection}
-                  onEndConnection={handleEndConnection}
-                  setIsDragging={setIsDragging}
-                  onMoveComplete={() => handleNodeMoveComplete(nodeId)}
-                />
-              );
-            })}
+            {Object.entries(nodes).map(([nodeId, node]) => (
+              <AINode
+                key={nodeId}
+                id={nodeId}
+                node={node}
+                theme={theme}
+                isSelected={selectedNodeId === nodeId}
+                canvasScale={canvasScale}
+                onSelect={() => setSelectedNodeId(nodeId)}
+                onMove={(x, y) => handleNodeMove(nodeId, x, y)}
+                onDelete={() => handleNodeDelete(nodeId)}
+                onStartConnection={handleStartConnection}
+                onEndConnection={handleEndConnection}
+                setIsDragging={setIsDragging}
+                onMoveComplete={handleNodeMoveComplete}
+              />
+            ))}
 
             {/* Connections */}
-            {currentModel && currentModel.connections.map((connection) => (
+            {connections.map((connection) => (
               <AIConnection
                 key={connection.id}
                 connection={connection}
-                nodes={currentModel.nodes}
+                nodes={nodes}
                 theme={theme}
                 onDelete={() => handleDeleteConnection(connection.id)}
               />
             ))}
 
-            {/* Connecting line */}
-            {connecting && currentModel?.nodes[connecting.sourceId] && (
-              <svg
-                className="absolute inset-0 pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
-              >
-                <line
-                  x1={currentModel.nodes[connecting.sourceId].x + 220}
-                  y1={currentModel.nodes[connecting.sourceId].y + 40}
-                  x2={currentModel.nodes[connecting.sourceId].x + 300}
-                  y2={currentModel.nodes[connecting.sourceId].y + 40}
-                  stroke={theme === 'dark' ? '#4273fa' : '#3b82f6'}
-                  strokeWidth="2"
-                  strokeDasharray="5,5"
-                />
-              </svg>
+            {/* Connecting line when dragging */}
+            {connecting && (
+              <DraggableConnection
+                sourceId={connecting.sourceId}
+                endPoint={connectionEndpoint}
+                nodes={nodes}
+                theme={theme}
+                hoveredNodeId={hoveredNodeId}
+              />
             )}
           </AIBuilderCanvas>
 
@@ -425,11 +380,11 @@ const handleAddNode = async (type: AINodeType, data: any) => {
         </div>
 
         {/* Side panel for node settings */}
-        {selectedNodeId && currentModel?.nodes[selectedNodeId] && (
+        {selectedNodeId && nodes[selectedNodeId] && (
           <div className={`w-96 ${theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'} border-l shadow-xl`}>
             <NodeSettings
               theme={theme}
-              node={currentModel.nodes[selectedNodeId]}
+              node={nodes[selectedNodeId]}
               nodeId={selectedNodeId}
               onUpdateNodeData={handleUpdateNodeData}
               onUpdateNodeTitle={handleUpdateNodeTitle}
@@ -449,11 +404,11 @@ const handleAddNode = async (type: AINodeType, data: any) => {
       )}
 
       {/* Preview Modal */}
-      {showPreview && currentModel && (
+      {showPreview && (
         <AIPreview
           theme={theme}
-          nodes={currentModel.nodes}
-          connections={currentModel.connections}
+          nodes={nodes}
+          connections={connections}
           onClose={() => setShowPreview(false)}
         />
       )}
@@ -464,13 +419,6 @@ const handleAddNode = async (type: AINodeType, data: any) => {
           theme={theme}
           onClose={() => setShowTutorial(false)}
         />
-      )}
-
-      {/* Save indicator */}
-      {isSaving && (
-        <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-          Saving...
-        </div>
       )}
     </div>
   );

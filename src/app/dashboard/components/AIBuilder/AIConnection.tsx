@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AIConnectionData, AINodeData } from './types';
 import { X } from 'lucide-react';
 
