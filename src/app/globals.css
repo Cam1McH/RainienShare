@@ -94,7 +94,7 @@ body {
 /* ==================================
    Canvas and Grid Styles
    ================================== */
-.ai-builder-canvas {
+/* .ai-builder-canvas {
   position: relative !important;
   overflow: hidden !important;
   width: 100% !important;
@@ -105,7 +105,7 @@ body {
   background-size: 40px 40px !important;
   background-image: linear-gradient(rgba(128, 128, 255, 0.05) 1px, transparent 1px),
                    linear-gradient(90deg, rgba(128, 128, 255, 0.05) 1px, transparent 1px) !important;
-}
+} */
 
 /* Canvas dragging state */
 .ai-builder-canvas.dragging {

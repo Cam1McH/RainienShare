@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AINodeType, AINodeData } from './types';
-import { X, Settings, ChevronDown, ChevronRight, Link } from 'lucide-react';
+import { X, Settings, ChevronDown, ChevronRight, ArrowRight, MessageSquare, GitBranch, Database, Cpu } from 'lucide-react';
 
 interface AINodeProps {
   id: string;
@@ -37,62 +37,52 @@ function AINode({
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [expanded, setExpanded] = useState(true);
+  const [hoverState, setHoverState] = useState({
+    input: false,
+    output: false
+  });
   
-  // Fixed node dimensions - wider to fit text better
+  // Node dimensions - consistent size for all nodes
   const NODE_WIDTH = 280;
-  const NODE_MIN_HEIGHT = 100;
   
-  // Get node styles based on type
-  const getNodeStyles = () => {
-    const styles: Record<string, {
-      border: string;
-      bg: string;
-      accent: string;
-      accentText: string;
-      gradient: string;
+  // Get node type-specific info
+  const getNodeTypeInfo = () => {
+    const types: Record<string, {
+      color: string;
+      bgColor: string;
+      icon: React.ReactNode;
     }> = {
       input: {
-        border: '#3b82f6',
-        bg: theme === 'dark' ? '#0f172a' : '#dbeafe',
-        accent: '#3b82f6',
-        accentText: 'text-blue-600',
-        gradient: 'from-blue-600 to-blue-500'
+        color: '#2563EB', // Blue
+        bgColor: '#EFF6FF',
+        icon: <MessageSquare size={18} />
       },
       process: {
-        border: '#10b981',
-        bg: theme === 'dark' ? '#0f1e16' : '#d1fae5',
-        accent: '#10b981',
-        accentText: 'text-green-600',
-        gradient: 'from-green-600 to-green-500'
+        color: '#16A34A', // Green
+        bgColor: '#F0FDF4',
+        icon: <Cpu size={18} />
       },
       output: {
-        border: '#8b5cf6',
-        bg: theme === 'dark' ? '#1c0f2e' : '#ede9fe',
-        accent: '#8b5cf6',
-        accentText: 'text-purple-600',
-        gradient: 'from-purple-600 to-purple-500'
+        color: '#9333EA', // Purple
+        bgColor: '#FAF5FF',
+        icon: <ArrowRight size={18} />
       },
       condition: {
-        border: '#f59e0b',
-        bg: theme === 'dark' ? '#291f0f' : '#fef3c7',
-        accent: '#f59e0b',
-        accentText: 'text-amber-600',
-        gradient: 'from-amber-600 to-amber-500'
+        color: '#D97706', // Amber
+        bgColor: '#FFFBEB',
+        icon: <GitBranch size={18} />
       },
       data: {
-        border: '#f97316',
-        bg: theme === 'dark' ? '#291a0f' : '#fff7ed',
-        accent: '#f97316',
-        accentText: 'text-orange-600',
-        gradient: 'from-orange-600 to-orange-500'
+        color: '#EA580C', // Orange
+        bgColor: '#FFF7ED',
+        icon: <Database size={18} />
       }
     };
     
-    // Default to process type if node.type doesn't match
-    return styles[node.type] || styles.process;
+    return types[node.type] || types.process;
   };
   
-  const nodeStyles = getNodeStyles();
+  const typeInfo = getNodeTypeInfo();
   
   // Get canvas rect for coordinate calculations
   const getCanvasRect = () => {
@@ -130,7 +120,7 @@ function AINode({
     e.nativeEvent.stopImmediatePropagation();
   };
   
-  // Handle mouse events directly on the component level
+  // Handle mouse events for dragging
   const handleMouseMove = (e: MouseEvent) => {
     if (isDraggingNode) {
       e.preventDefault();
@@ -183,7 +173,6 @@ function AINode({
   const handleStartConnectionFromOutputPort = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Starting connection from output port", id);
     onStartConnection(id);
   };
   
@@ -191,9 +180,11 @@ function AINode({
   const handleReceiveConnectionToInputPort = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Receiving connection at input port", id);
     onEndConnection(id);
   };
+
+  // Fixed port position - exactly at the vertical middle point (y + 50px)
+  const PORT_Y_POSITION = 50;
 
   return (
     <div
@@ -215,181 +206,250 @@ function AINode({
         onSelect();
       }}
     >
-      {/* Node container with improved shadows and animation */}
+      {/* Modern node container with subtle shadow */}
       <div
-        className={`relative rounded-lg overflow-hidden transition-all duration-200 ${
+        className={`relative rounded-xl overflow-hidden transition-all duration-200 ${
           isSelected 
-            ? 'ring-2 shadow-xl' 
-            : 'shadow-md hover:shadow-lg'
+            ? 'ring-2' 
+            : ''
         }`}
         style={{
-          backgroundColor: theme === 'dark' ? '#13131f' : '#ffffff',
-          borderColor: nodeStyles.border,
-          borderWidth: '2px',
-          borderStyle: 'solid',
+          backgroundColor: theme === 'dark' ? '#1F1F2E' : 'white',
           boxShadow: isSelected 
-            ? `0 4px 20px ${nodeStyles.accent}40` 
-            : undefined,
-          ringColor: nodeStyles.accent
+            ? `0 10px 25px -5px ${typeInfo.color}30, 0 8px 10px -6px ${typeInfo.color}20` 
+            : theme === 'dark'
+              ? '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2)'
+              : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+          borderLeft: `3px solid ${typeInfo.color}`,
+          borderBottom: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+          borderRight: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+          borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.02)'}`,
+          ringColor: typeInfo.color
         }}
       >
-        {/* Header with gradient */}
+        {/* Header */}
         <div 
-          className={`px-4 py-2.5 flex items-center justify-between bg-gradient-to-r ${nodeStyles.gradient}`}
+          className="px-4 py-3 flex items-center justify-between border-b"
+          style={{
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+          }}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Type icon */}
+            <div 
+              className="rounded-lg p-1.5 flex items-center justify-center" 
+              style={{
+                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : typeInfo.bgColor,
+                color: typeInfo.color
+              }}
+            >
+              {typeInfo.icon}
+            </div>
+            
+            <div>
+              <h3 className="font-medium truncate max-w-[160px]"
+                style={{
+                  color: theme === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)'
+                }}>
+                {node.title}
+              </h3>
+              <div className="text-xs opacity-60 -mt-0.5">
+                {node.type.charAt(0).toUpperCase() + node.type.slice(1)}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button 
-              className="node-action p-0.5 text-white/80 hover:text-white transition-colors focus:outline-none"
+              className="node-action p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity"
+              style={{
+                backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'
+              }}
+              title="Toggle content"
               onClick={(e) => {
                 e.stopPropagation();
                 setExpanded(!expanded);
               }}
             >
-              {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {expanded ? 
+                <ChevronDown size={14} className={theme === 'dark' ? 'text-white' : 'text-black'} /> : 
+                <ChevronRight size={14} className={theme === 'dark' ? 'text-white' : 'text-black'} />
+              }
             </button>
             
-            <h3 className="font-medium text-white truncate">
-              {node.title}
-            </h3>
-          </div>
-          
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Connection button */}
             <button 
-              className="node-action p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-sm transition-colors"
-              title="Create connection"
-              onClick={(e) => {
-                e.stopPropagation();
-                onStartConnection(id);
+              className="node-action p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity"
+              style={{
+                backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'
               }}
-            >
-              <Link size={14} />
-            </button>
-            
-            <button 
-              className="node-action p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-sm transition-colors"
-              title="Open settings"
+              title="Edit node"
               onClick={(e) => {
                 e.stopPropagation();
                 onSelect();
               }}
             >
-              <Settings size={14} />
+              <Settings size={14} className={theme === 'dark' ? 'text-white' : 'text-black'} />
             </button>
             
             <button 
-              className="node-action p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-sm transition-colors"
+              className="node-action p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity"
+              style={{
+                backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'
+              }}
               title="Delete node"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
             >
-              <X size={14} />
+              <X size={14} className={theme === 'dark' ? 'text-white' : 'text-black'} />
             </button>
           </div>
         </div>
         
-        {/* Node type badge */}
-        <div 
-          className="absolute top-0 left-0 mt-3 ml-3 z-10 px-2 py-0.5 text-xs font-medium rounded-full"
-          style={{
-            backgroundColor: `${nodeStyles.accent}22`,
-            color: nodeStyles.accent
-          }}
-        >
-          {node.type}
-        </div>
-        
-        {/* Content with better text handling */}
+        {/* Content */}
         {expanded && (
-          <div className={`p-4 ${theme === 'dark' ? 'bg-[#13131f]' : 'bg-white'}`}>
-            <p className={`text-sm whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-              {node.description || (node.data?.description as string) || 'No description provided'}
+          <div className="p-4" style={{
+            color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)'
+          }}>
+            <p className="text-sm">
+              {node.description || 'No description provided'}
             </p>
             
-            {/* Show data fields if any exist */}
+            {/* Properties section */}
             {node.data && typeof node.data === 'object' && Object.keys(node.data).filter(k => k !== 'description').length > 0 && (
-              <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 gap-2">
+              <div className="mt-3 pt-3 border-t"
+                style={{
+                  borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                }}>
+                <div className="grid grid-cols-1 gap-2 text-xs">
                   {Object.entries(node.data)
                     .filter(([key]) => key !== 'description' && key !== 'skillLevel' && key !== 'title')
                     .slice(0, 3) // Limit to first 3 properties
-                    .map(([key, value]) => (
-                      <div key={key} className="flex items-start">
-                        <span className={`text-xs font-medium ${nodeStyles.accentText} mr-2`}>
-                          {key}:
-                        </span>
-                        <span className={`text-xs truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {typeof value === 'string' 
-                            ? value.length > 20 ? value.substring(0, 20) + '...' : value
-                            : typeof value === 'object'
-                              ? '{...}'
-                              : String(value)
-                          }
-                        </span>
-                      </div>
-                    ))}
+                    .map(([key, value]) => {
+                      const displayValue = typeof value === 'string'
+                        ? (value.length > 30 ? value.substring(0, 30) + '...' : value)
+                        : typeof value === 'object'
+                          ? '{...}'
+                          : String(value);
+                      
+                      // Format key for display
+                      const formattedKey = key
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, str => str.toUpperCase());
+                      
+                      return (
+                        <div key={key} className="flex items-start">
+                          <span className="font-medium mr-2 opacity-80"
+                            style={{
+                              color: typeInfo.color
+                            }}>
+                            {formattedKey}:
+                          </span>
+                          <span className="truncate opacity-80">
+                            {displayValue}
+                          </span>
+                        </div>
+                      );
+                    })}
                 </div>
                 
                 {/* Show indication if there are more properties */}
-                {node.data && typeof node.data === 'object' && 
-                  Object.keys(node.data).filter(k => k !== 'description' && k !== 'skillLevel' && k !== 'title').length > 3 && (
-                  <div className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
-                    + {Object.keys(node.data).filter(k => k !== 'description' && k !== 'skillLevel' && k !== 'title').length - 3} more...
+                {Object.keys(node.data).filter(k => k !== 'description' && k !== 'skillLevel' && k !== 'title').length > 3 && (
+                  <div className="text-xs mt-1 italic opacity-50">
+                    + {Object.keys(node.data).filter(k => k !== 'description' && k !== 'skillLevel' && k !== 'title').length - 3} more properties
                   </div>
                 )}
               </div>
             )}
           </div>
         )}
+      </div>
+      
+      {/* Input port (left side) */}
+      <div 
+        className="absolute z-20"
+        style={{
+          left: -20, // Fixed distance from node
+          top: PORT_Y_POSITION,
+          transform: 'translateY(-50%)'
+        }}
+        onMouseEnter={() => setHoverState(prev => ({ ...prev, input: true }))}
+        onMouseLeave={() => setHoverState(prev => ({ ...prev, input: false }))}
+      >
+        {/* Tooltip */}
+        {hoverState.input && (
+          <div className="absolute whitespace-nowrap right-full mr-2 px-2 py-1 rounded bg-black/80 text-white text-xs">
+            Connect Input
+          </div>
+        )}
         
-        {/* Input port (left side) */}
-        <div 
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2"
-        >
-          <div
-            className="connection-port input-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
-            style={{
-              backgroundColor: theme === 'dark' ? '#13131f' : 'white',
-              borderColor: nodeStyles.accent,
-              borderWidth: '2px',
-              boxShadow: `0 2px 4px rgba(0,0,0,0.1), 0 0 8px ${nodeStyles.accent}40`
-            }}
-            data-node-id={id}
-            data-port-type="input"
-            onClick={handleReceiveConnectionToInputPort}
-          >
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: nodeStyles.accent }}
-            />
-          </div>
-        </div>
-
-        {/* Output port (right side) */}
+        {/* Connection port with vibrant styling */}
         <div
-          className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2"
+          className="connection-port input-port h-12 w-12 rounded-full flex items-center justify-center cursor-crosshair transition-transform hover:scale-110"
+          style={{
+            backgroundColor: theme === 'dark' ? 'rgba(17, 17, 27, 0.8)' : 'white',
+            border: `3px solid ${typeInfo.color}`,
+            boxShadow: `0 0 10px ${typeInfo.color}${hoverState.input ? 'CC' : '80'}`
+          }}
+          data-node-id={id}
+          data-port-type="input"
+          onClick={handleReceiveConnectionToInputPort}
         >
           <div
-            className="connection-port output-port h-6 w-6 rounded-full border cursor-crosshair hover:scale-110 transition-all flex items-center justify-center"
-            style={{
-              backgroundColor: theme === 'dark' ? '#13131f' : 'white',
-              borderColor: nodeStyles.accent,
-              borderWidth: '2px',
-              boxShadow: `0 2px 4px rgba(0,0,0,0.1), 0 0 8px ${nodeStyles.accent}40`
-            }}
-            data-node-id={id}
-            data-port-type="output"
-            onClick={handleStartConnectionFromOutputPort}
-          >
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: nodeStyles.accent }}
-            />
-          </div>
+            className="h-4 w-4 rounded-full animate-pulse"
+            style={{ backgroundColor: typeInfo.color }}
+          />
         </div>
       </div>
+      
+      {/* Output port (right side) */}
+      <div 
+        className="absolute z-20"
+        style={{
+          left: NODE_WIDTH + 20, // Fixed distance from right edge of node
+          top: PORT_Y_POSITION,
+          transform: 'translateY(-50%)'
+        }}
+        onMouseEnter={() => setHoverState(prev => ({ ...prev, output: true }))}
+        onMouseLeave={() => setHoverState(prev => ({ ...prev, output: false }))}
+      >
+        {/* Tooltip */}
+        {hoverState.output && (
+          <div className="absolute whitespace-nowrap left-full ml-2 px-2 py-1 rounded bg-black/80 text-white text-xs">
+            Connect Output
+          </div>
+        )}
+        
+        {/* Connection port with vibrant styling */}
+        <div
+          className="connection-port output-port h-12 w-12 rounded-full flex items-center justify-center cursor-crosshair transition-transform hover:scale-110"
+          style={{
+            backgroundColor: theme === 'dark' ? 'rgba(17, 17, 27, 0.8)' : 'white',
+            border: `3px solid ${typeInfo.color}`,
+            boxShadow: `0 0 10px ${typeInfo.color}${hoverState.output ? 'CC' : '80'}`
+          }}
+          data-node-id={id}
+          data-port-type="output"
+          onClick={handleStartConnectionFromOutputPort}
+        >
+          <div
+            className="h-4 w-4 rounded-full animate-pulse"
+            style={{ backgroundColor: typeInfo.color }}
+          />
+        </div>
+      </div>
+      
+      {/* Selection indicator */}
+      {isSelected && (
+        <div 
+          className="absolute -inset-2 rounded-xl pointer-events-none animate-pulse-slow"
+          style={{ 
+            border: `2px dashed ${typeInfo.color}`,
+            zIndex: -1
+          }}
+        />
+      )}
     </div>
   );
 }

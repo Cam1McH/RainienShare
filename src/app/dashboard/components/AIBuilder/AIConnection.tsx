@@ -20,22 +20,29 @@ interface DraggableConnectionProps {
   hoveredNodeId?: string | null;
 }
 
-// Helper to get node connection points
+// Helper to get node connection points - FIXED POSITIONS
 const getNodeConnectionPoints = (node: AINodeData) => {
+  // These must match the exact positions in AINode.tsx
   return {
-    output: { x: node.x + 280, y: node.y + 50 }, // Right side middle
-    input: { x: node.x, y: node.y + 50 } // Left side middle
+    output: { 
+      x: node.x + 280 + 20, // Node width + port offset (match AINode.tsx)
+      y: node.y + 50 // Fixed vertical position (match AINode.tsx)
+    },
+    input: { 
+      x: node.x - 20, // Left position with offset (match AINode.tsx)
+      y: node.y + 50 // Fixed vertical position (match AINode.tsx)
+    }
   };
 };
 
 // Get node type colors with enhanced visibility
 const getNodeColor = (nodeType: string) => {
   switch (nodeType) {
-    case 'input': return '#4f46e5'; // indigo
-    case 'process': return '#16a34a'; // green
-    case 'output': return '#8b5cf6'; // purple
-    case 'condition': return '#eab308'; // yellow
-    case 'data': return '#ea580c'; // orange
+    case 'input': return '#2563EB'; // Blue
+    case 'process': return '#16A34A'; // Green
+    case 'output': return '#9333EA'; // Purple
+    case 'condition': return '#D97706'; // Amber
+    case 'data': return '#EA580C'; // Orange
     default: return '#6b7280'; // gray
   }
 };
@@ -89,8 +96,8 @@ export function DraggableConnection({
         {/* Shadow path */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}
@@ -102,8 +109,8 @@ export function DraggableConnection({
         {/* Main connection path with curve */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={color}
@@ -116,15 +123,15 @@ export function DraggableConnection({
         {/* Animated flow along path */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={`url(#gradient-${connectionId})`}
           strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray="5 15"
-          className="animate-dash"
+          className="animate-flow"
           style={{ animationDuration: '1s' }}
         />
         
@@ -212,7 +219,7 @@ function AIConnection({
         left: 0, 
         width: '100%', 
         height: '100%',
-        zIndex: 5,
+        zIndex: hoverState ? 15 : 5,
         pointerEvents: 'none'
       }}
     >
@@ -242,8 +249,8 @@ function AIConnection({
         {/* Invisible wider path for hover detection */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke="transparent"
@@ -256,8 +263,8 @@ function AIConnection({
         {/* Shadow path */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}
@@ -269,8 +276,8 @@ function AIConnection({
         {/* Main connection path with curve */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={color}
@@ -282,15 +289,15 @@ function AIConnection({
         {/* Animated flow along path */}
         <path
           d={`M ${sourcePoint.x} ${sourcePoint.y} 
-              C ${sourcePoint.x + 50} ${sourcePoint.y}, 
-                ${targetPoint.x - 50} ${targetPoint.y}, 
+              C ${sourcePoint.x + 100} ${sourcePoint.y}, 
+                ${targetPoint.x - 100} ${targetPoint.y}, 
                 ${targetPoint.x} ${targetPoint.y}`}
           fill="none"
           stroke={`url(#gradient-${connectionId})`}
           strokeWidth={hoverState ? "4" : "3"}
           strokeLinecap="round"
           strokeDasharray="5 15"
-          className="animate-dash"
+          className="animate-flow"
           style={{ animationDuration: '1.5s' }}
         />
         
