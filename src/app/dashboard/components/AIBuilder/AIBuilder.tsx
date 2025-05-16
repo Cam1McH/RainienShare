@@ -10,7 +10,7 @@ import NodeSettings from './NodeSettings';
 import AIPreview from './AIPreview';
 import InteractiveTutorial from './InteractiveTutorial';
 import { AINodeData, AIConnectionData, AINodeType } from './types';
-import { Plus } from 'lucide-react';
+import { Plus, Share2, Download, AlertCircle, Zap, Sparkles, Command } from 'lucide-react';
 
 interface AIBuilderProps {
   theme: 'light' | 'dark';
@@ -30,6 +30,7 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId = 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [canvasScale, setCanvasScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
+  const [showShortcutOverlay, setShowShortcutOverlay] = useState(false);
   
   // Connection state
   const [connecting, setConnecting] = useState<{ sourceId: string } | null>(null);
@@ -133,6 +134,24 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId = 
           (e.key === 'y' && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         redo();
+      }
+      
+      // Show shortcuts overlay: ?
+      if (e.key === '?') {
+        e.preventDefault();
+        setShowShortcutOverlay(prev => !prev);
+      }
+      
+      // Show/hide node panel: N
+      if (e.key === 'n') {
+        e.preventDefault();
+        setShowNodePanel(prev => !prev);
+      }
+      
+      // Preview: P
+      if (e.key === 'p') {
+        e.preventDefault();
+        setShowPreview(prev => !prev);
       }
     };
     
@@ -369,63 +388,63 @@ const AIBuilder: React.FC<AIBuilderProps> = ({ theme, closeAIBuilder, modelId = 
   };
 
   const handleNodeDelete = async (nodeId: string) => {
-  // Find connections involving this node
-  const affectedConnections = connections.filter(
-    conn => conn.sourceId === nodeId || conn.targetId === nodeId
-  );
-  
-  // Optimistic UI update
-  const newNodes = { ...nodes };
-  delete newNodes[nodeId];
-  
-  const newConnections = connections.filter(
-    conn => conn.sourceId !== nodeId && conn.targetId !== nodeId
-  );
-  
-  setNodes(newNodes);
-  setConnections(newConnections);
-  
-  if (selectedNodeId === nodeId) {
-    setSelectedNodeId(null);
-  }
-  
-  try {
-    setIsLoading(true);
+    // Find connections involving this node
+    const affectedConnections = connections.filter(
+      conn => conn.sourceId === nodeId || conn.targetId === nodeId
+    );
     
-    // Send to server
-    const response = await fetch(`/api/aimodels/${modelId}/nodes/${nodeId}`, {
-      method: 'DELETE',
-    });
+    // Optimistic UI update
+    const newNodes = { ...nodes };
+    delete newNodes[nodeId];
     
-    if (!response.ok) {
-      throw new Error(`Failed to delete node: ${response.statusText}`);
+    const newConnections = connections.filter(
+      conn => conn.sourceId !== nodeId && conn.targetId !== nodeId
+    );
+    
+    setNodes(newNodes);
+    setConnections(newConnections);
+    
+    if (selectedNodeId === nodeId) {
+      setSelectedNodeId(null);
     }
     
-    // Update history after successful API call
-    saveToHistory(newNodes, newConnections);
-    setSuccessMessage('Node deleted successfully');
-  } catch (err) {
-    console.error('Error deleting node:', err);
-    setError(err instanceof Error ? err.message : 'Failed to delete node');
-    
-    // Rollback on failure
-    setNodes(nodes);
-    setConnections(connections);
-  } finally {
-    // Always reset loading state, even if there's an error
-    setIsLoading(false);
-  }
-};
-
-// Also add a useEffect to clean up loading state when component unmounts
-useEffect(() => {
-  return () => {
-    // Clean up loading state when component unmounts
-    setIsLoading(false);
-    setError(null);
-    setSuccessMessage(null);
+    try {
+      setIsLoading(true);
+      
+      // Send to server
+      const response = await fetch(`/api/aimodels/${modelId}/nodes/${nodeId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete node: ${response.statusText}`);
+      }
+      
+      // Update history after successful API call
+      saveToHistory(newNodes, newConnections);
+      setSuccessMessage('Node deleted successfully');
+    } catch (err) {
+      console.error('Error deleting node:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete node');
+      
+      // Rollback on failure
+      setNodes(nodes);
+      setConnections(connections);
+    } finally {
+      // Always reset loading state, even if there's an error
+      setIsLoading(false);
+    }
   };
-}, []);
+
+  // Also add a useEffect to clean up loading state when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up loading state when component unmounts
+      setIsLoading(false);
+      setError(null);
+      setSuccessMessage(null);
+    };
+  }, []);
 
   // Connection operations
   const handleStartConnection = (sourceId: string) => {
@@ -516,38 +535,37 @@ useEffect(() => {
     }
   };
 
-const handleDeleteConnection = async (connectionId: string) => {
-  // Optimistic UI update
-  const newConnections = connections.filter(conn => conn.id !== connectionId);
-  setConnections(newConnections);
-  
-  try {
-    setIsLoading(true);
+  const handleDeleteConnection = async (connectionId: string) => {
+    // Optimistic UI update
+    const newConnections = connections.filter(conn => conn.id !== connectionId);
+    setConnections(newConnections);
     
-    // Send to server
-    const response = await fetch(`/api/aimodels/${modelId}/connections/${connectionId}`, {
-      method: 'DELETE',
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to delete connection: ${response.statusText}`);
+    try {
+      setIsLoading(true);
+      
+      // Send to server
+      const response = await fetch(`/api/aimodels/${modelId}/connections/${connectionId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete connection: ${response.statusText}`);
+      }
+      
+      // Update history after successful API call
+      saveToHistory(nodes, newConnections);
+      setSuccessMessage('Connection deleted successfully');
+    } catch (err) {
+      console.error('Error deleting connection:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete connection');
+      
+      // Rollback on failure
+      setConnections(connections);
+    } finally {
+      // Always reset loading state, even in case of error
+      setIsLoading(false);
     }
-    
-    // Update history after successful API call
-    saveToHistory(nodes, newConnections);
-    setSuccessMessage('Connection deleted successfully');
-  } catch (err) {
-    console.error('Error deleting connection:', err);
-    setError(err instanceof Error ? err.message : 'Failed to delete connection');
-    
-    // Rollback on failure
-    setConnections(connections);
-  } finally {
-    // Always reset loading state, even in case of error
-    setIsLoading(false);
-  }
-};
-
+  };
 
   // Node settings
   const handleUpdateNodeData = async (data: any) => {
@@ -754,41 +772,86 @@ const handleDeleteConnection = async (connectionId: string) => {
             )}
           </AIBuilderCanvas>
 
-          {/* Add Node Button */}
+          {/* Add Node Button with premium styling */}
           <button
             onClick={() => setShowNodePanel(true)}
-            className={`fixed left-6 top-1/2 -translate-y-1/2 z-20 p-4 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110`}
+            className={`fixed left-6 top-1/2 -translate-y-1/2 z-20 p-4 rounded-full text-white shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-110 bg-gradient-to-r from-purple-600 to-pink-600`}
             title="Add Building Block"
             disabled={isLoading}
           >
             <Plus className="h-6 w-6" />
           </button>
           
-          {/* Status notifications */}
+          {/* Keyboard shortcuts button */}
+          <button
+            onClick={() => setShowShortcutOverlay(prev => !prev)}
+            className={`fixed left-6 bottom-6 z-20 p-3 rounded-full ${
+              theme === 'dark' ? 'bg-[#1a1a2e] text-gray-300 hover:bg-[#252536]' : 'bg-white text-gray-700 hover:bg-gray-100'
+            } shadow-lg hover:shadow-xl transition-all duration-200 border ${
+              theme === 'dark' ? 'border-[#2a2a3c]' : 'border-gray-200'
+            }`}
+            title="Keyboard Shortcuts"
+          >
+            <Command className="h-5 w-5" />
+          </button>
+          
+          {/* Status notifications with premium glass effect */}
           {successMessage && (
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-green-500 text-white rounded-md shadow-lg z-50">
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-green-500/10 text-green-400 border border-green-500/20 rounded-full shadow-lg z-50 flex items-center gap-2 backdrop-blur-sm">
+              <div className="w-2 h-2 rounded-full bg-green-400"></div>
               {successMessage}
             </div>
           )}
           
           {error && (
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-red-500 text-white rounded-md shadow-lg z-50">
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full shadow-lg z-50 flex items-center gap-2 backdrop-blur-sm">
+              <AlertCircle className="h-4 w-4" />
               {error}
             </div>
           )}
           
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="fixed top-4 right-4 bg-black/50 text-white px-3 py-1 rounded-md z-50 flex items-center">
-              <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-              Processing...
+          {/* Drag connection helper */}
+          {connecting && (
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full shadow-lg z-50 flex items-center gap-2 backdrop-blur-sm">
+              <Sparkles className="h-4 w-4" />
+              Drag to connect with another node
             </div>
           )}
+          
+          {/* Top power actions toolbar */}
+          <div className={`fixed top-20 right-4 z-20 p-2 rounded-lg ${
+            theme === 'dark' ? 'bg-[#1a1a2e]/80 border-[#2a2a3c]' : 'bg-white/80 border-gray-200'
+          } border shadow-lg backdrop-blur-sm flex flex-col gap-2`}>
+            <button
+              className={`p-2 rounded-lg ${
+                theme === 'dark' ? 'hover:bg-[#252536] text-purple-400' : 'hover:bg-gray-100 text-purple-600'
+              } transition-colors`}
+              title="Share Model"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+            <button
+              className={`p-2 rounded-lg ${
+                theme === 'dark' ? 'hover:bg-[#252536] text-purple-400' : 'hover:bg-gray-100 text-purple-600'
+              } transition-colors`}
+              title="Export Model"
+            >
+              <Download className="h-5 w-5" />
+            </button>
+            <button
+              className={`p-2 rounded-lg ${
+                theme === 'dark' ? 'hover:bg-[#252536] text-purple-400' : 'hover:bg-gray-100 text-purple-600'
+              } transition-colors`}
+              title="Auto-arrange Nodes"
+            >
+              <Zap className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Side panel for node settings */}
         {selectedNodeId && nodes[selectedNodeId] && (
-          <div className={`w-96 ${theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'} border-l shadow-xl`}>
+          <div className={`w-96 ${theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'} border-l shadow-xl transition-all duration-200`}>
             <NodeSettings
               theme={theme}
               node={nodes[selectedNodeId]}
@@ -828,6 +891,67 @@ const handleDeleteConnection = async (connectionId: string) => {
           theme={theme}
           onClose={() => setShowTutorial(false)}
         />
+      )}
+      
+      {/* Keyboard Shortcuts Overlay */}
+      {showShortcutOverlay && (
+        <div 
+          className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center"
+          onClick={() => setShowShortcutOverlay(false)}
+        >
+          <div 
+            className={`max-w-lg w-full rounded-xl ${
+              theme === 'dark' ? 'bg-[#13131f] border-[#2a2a3c]' : 'bg-white border-gray-200'
+            } border shadow-2xl overflow-hidden`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className={`p-4 border-b ${
+              theme === 'dark' ? 'border-[#2a2a3c]' : 'border-gray-200'
+            } flex justify-between items-center`}>
+              <h3 className={`text-lg font-medium ${
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              }`}>Keyboard Shortcuts</h3>
+              <button 
+                onClick={() => setShowShortcutOverlay(false)}
+                className={`p-1 rounded-lg ${
+                  theme === 'dark' ? 'hover:bg-[#252536] text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                }`}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className={`p-6 ${
+              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+            }`}>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { key: 'Delete', action: 'Delete selected node' },
+                  { key: 'Esc', action: 'Cancel connection, close modal' },
+                  { key: 'Ctrl+Z', action: 'Undo' },
+                  { key: 'Ctrl+Y', action: 'Redo' },
+                  { key: 'N', action: 'Add new node' },
+                  { key: 'P', action: 'Preview model' },
+                  { key: '?', action: 'Show shortcuts' },
+                  { key: 'Ctrl+S', action: 'Save model' }
+                ].map((shortcut, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span>{shortcut.action}</span>
+                    <span className={`px-2 py-1 rounded text-sm ${
+                      theme === 'dark' ? 'bg-[#252536] text-purple-400' : 'bg-gray-100 text-purple-600'
+                    }`}>{shortcut.key}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className={`mt-6 pt-6 border-t ${
+                theme === 'dark' ? 'border-[#2a2a3c] text-gray-400' : 'border-gray-200 text-gray-500'
+              } text-sm`}>
+                <p>Pro Tip: You can drag between node connection points to create connections. Right-click on connections to edit or delete them.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Global CSS for animations */}

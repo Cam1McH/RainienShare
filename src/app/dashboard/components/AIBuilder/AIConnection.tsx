@@ -91,6 +91,12 @@ export function DraggableConnection({
             <stop offset="50%" stopColor={color} stopOpacity="0.8" />
             <stop offset="100%" stopColor={color} stopOpacity="0.1" />
           </linearGradient>
+          
+          {/* Define glow effect */}
+          <filter id={`glow-${connectionId}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
         
         {/* Shadow path */}
@@ -118,6 +124,7 @@ export function DraggableConnection({
           strokeLinecap="round"
           strokeDasharray={hoveredNodeId ? "none" : "5,5"}
           className="animate-dash"
+          style={{filter: `drop-shadow(0 0 3px ${color}80)`}}
         />
         
         {/* Animated flow along path */}
@@ -135,20 +142,22 @@ export function DraggableConnection({
           style={{ animationDuration: '1s' }}
         />
         
-        {/* Source point */}
+        {/* Source point with glow */}
         <circle
           cx={sourcePoint.x}
           cy={sourcePoint.y}
           r="5"
           fill={color}
+          filter={`url(#glow-${connectionId})`}
         />
         
-        {/* Target point */}
+        {/* Target point with glow and pulse animation */}
         <circle
           cx={targetPoint.x}
           cy={targetPoint.y}
           r="5"
           fill={color}
+          filter={`url(#glow-${connectionId})`}
           className={hoveredNodeId ? "animate-pulse" : ""}
         />
         
@@ -157,10 +166,11 @@ export function DraggableConnection({
           <polygon
             points={`${targetPoint.x-12},${targetPoint.y-6} ${targetPoint.x},${targetPoint.y} ${targetPoint.x-12},${targetPoint.y+6}`}
             fill={color}
+            filter={`url(#glow-${connectionId})`}
           />
         )}
         
-        {/* Target node highlight */}
+        {/* Target node highlight with animated border */}
         {hoveredNodeId && nodes[hoveredNodeId] && (
           <rect
             x={nodes[hoveredNodeId].x - 5}
@@ -173,6 +183,7 @@ export function DraggableConnection({
             strokeWidth="2"
             strokeDasharray="5,5"
             className="animate-pulse"
+            style={{filter: `drop-shadow(0 0 5px ${color}80)`}}
           />
         )}
       </svg>
@@ -244,6 +255,12 @@ function AIConnection({
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
           </marker>
+          
+          {/* Define glow effect */}
+          <filter id={`glow-${connectionId}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
         
         {/* Invisible wider path for hover detection */}
@@ -301,44 +318,51 @@ function AIConnection({
           style={{ animationDuration: '1.5s' }}
         />
         
-        {/* Source point */}
+        {/* Source point with glow */}
         <circle
           cx={sourcePoint.x}
           cy={sourcePoint.y}
           r="4"
           fill={color}
+          filter={`url(#glow-${connectionId})`}
         />
         
-        {/* Target point */}
+        {/* Target point with glow */}
         <circle
           cx={targetPoint.x}
           cy={targetPoint.y}
           r="4"
           fill={color}
+          filter={`url(#glow-${connectionId})`}
         />
         
-        {/* Arrow marker */}
+        {/* Arrow marker with glow */}
         <path
           d={`M ${targetPoint.x - 15} ${targetPoint.y} L ${targetPoint.x - 2} ${targetPoint.y}`}
           stroke={color}
           strokeWidth="3"
           markerEnd={`url(#arrow-${connectionId})`}
+          filter={`url(#glow-${connectionId})`}
         />
         
-        {/* Label and delete button - show on hover */}
+        {/* Label and delete button - enhanced glass effect on hover */}
         {hoverState && (
           <g>
+            {/* Glass effect background */}
             <rect 
               x={midX - 60}
               y={midY - 20}
               width="120"
               height="40"
               rx="20"
-              fill={theme === 'dark' ? '#1a1a2e' : '#ffffff'}
+              fill={theme === 'dark' ? 'rgba(26, 26, 46, 0.85)' : 'rgba(255, 255, 255, 0.85)'}
               stroke={color}
               strokeWidth="1.5"
-              style={{ pointerEvents: 'all' }}
-              filter={`drop-shadow(0 4px 8px rgba(0,0,0,0.15))`}
+              style={{ 
+                pointerEvents: 'all',
+                filter: `drop-shadow(0 4px 8px rgba(0,0,0,0.15)) ${hoverState ? `drop-shadow(0 0 4px ${color}40)` : ''}`,
+                backdropFilter: 'blur(4px)'
+              }}
             />
             
             <text
@@ -346,20 +370,25 @@ function AIConnection({
               y={midY}
               fill={color}
               fontSize="12"
+              fontWeight="500"
               style={{ pointerEvents: 'none', dominantBaseline: 'middle' }}
             >
               {sourceNode.type} → {targetNode.type}
             </text>
             
-            {/* Delete button */}
+            {/* Delete button with hover effect */}
             <circle
               cx={midX + 30}
               cy={midY}
               r="15"
-              fill={theme === 'dark' ? '#1a1a2e' : '#ffffff'}
+              fill={theme === 'dark' ? 'rgba(26, 26, 46, 0.9)' : 'rgba(255, 255, 255, 0.9)'}
               stroke={color}
               strokeWidth="1.5"
-              style={{ pointerEvents: 'all', cursor: 'pointer' }}
+              style={{ 
+                pointerEvents: 'all', 
+                cursor: 'pointer',
+                filter: `drop-shadow(0 0 3px ${color}40)`
+              }}
               onClick={(e) => {
                 if (e.stopPropagation) e.stopPropagation();
                 onDelete();

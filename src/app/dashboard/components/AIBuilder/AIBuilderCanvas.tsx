@@ -91,7 +91,7 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
       };
     }, [isDragging, startDragPos, startCanvasPos]);
     
-    // Grid pattern
+    // Grid pattern setup with premium touches
     const gridSize = 40 * scale;
     const gridOffsetX = position.x % gridSize;
     const gridOffsetY = position.y % gridSize;
@@ -105,9 +105,28 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
       >
-        {/* Animated grid background */}
+        {/* Enhanced background with gradients */}
+        <div className="absolute inset-0 z-0">
+          {theme === 'dark' ? (
+            <>
+              {/* Dark theme background with premium gradients */}
+              <div className="absolute inset-0 bg-zinc-950"></div>
+              <div className="absolute top-0 -left-40 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-purple-600/10 to-indigo-600/5 blur-[100px]"></div>
+              <div className="absolute -bottom-20 -right-40 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-pink-600/10 to-orange-600/5 blur-[100px]"></div>
+            </>
+          ) : (
+            <>
+              {/* Light theme background with subtle gradients */}
+              <div className="absolute inset-0 bg-gray-50"></div>
+              <div className="absolute top-0 -left-40 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-purple-500/5 to-indigo-500/5 blur-[100px]"></div>
+              <div className="absolute -bottom-20 -right-40 h-[500px] w-[500px] rounded-full bg-gradient-to-tr from-pink-500/5 to-orange-500/5 blur-[100px]"></div>
+            </>
+          )}
+        </div>
+        
+        {/* Animated premium grid background */}
         <div 
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 z-10"
           style={{
             backgroundImage: `
               linear-gradient(${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'} 1px, transparent 1px),
@@ -121,7 +140,7 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
         
         {/* Canvas content */}
         <div
-          className="transform-origin-top-left absolute"
+          className="transform-origin-top-left absolute z-20"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
             transition: isDragging ? 'none' : 'transform 0.1s ease-out',
@@ -134,11 +153,39 @@ const AIBuilderCanvas = forwardRef<HTMLDivElement, AIBuilderCanvasProps>(
           {children}
         </div>
         
-        {/* Zoom indicator */}
-        <div className={`absolute bottom-4 right-4 px-3 py-1 rounded-lg ${
-          theme === 'dark' ? 'bg-[#13131f]/80 border-[#2a2a3c] text-gray-300' : 'bg-white/80 border-gray-200 text-gray-700'
-        } border backdrop-blur-sm`}>
+        {/* Premium zoom indicator with glass effect */}
+        <div className={`absolute bottom-4 right-4 px-3 py-1.5 rounded-lg ${
+          theme === 'dark' ? 'bg-[#13131f]/70 border-[#2a2a3c] text-gray-300' : 'bg-white/80 border-gray-200 text-gray-700'
+        } border backdrop-blur-sm flex items-center gap-2 shadow-lg`}>
+          <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"></div>
           {Math.round(scale * 100)}%
+        </div>
+        
+        {/* Mini map indicator */}
+        <div className={`absolute bottom-4 left-4 w-32 h-24 rounded-lg ${
+          theme === 'dark' ? 'bg-[#13131f]/70 border-[#2a2a3c]' : 'bg-white/80 border-gray-200'
+        } border backdrop-blur-sm overflow-hidden shadow-lg`}>
+          {/* Mini canvas representation */}
+          <div className="absolute inset-0 opacity-30">
+            <div className="absolute inset-0" style={{
+              backgroundImage: `
+                linear-gradient(${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
+                linear-gradient(90deg, ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
+              `,
+              backgroundSize: `8px 8px`,
+            }}></div>
+          </div>
+          
+          {/* Viewport indicator */}
+          <div className="absolute border-2 border-purple-500 rounded-sm bg-purple-500/10"
+            style={{
+              left: `${Math.min(100, Math.max(0, -position.x / 40))}%`,
+              top: `${Math.min(100, Math.max(0, -position.y / 30))}%`,
+              width: `${Math.min(100, 100 / scale)}%`,
+              height: `${Math.min(100, 100 / scale)}%`,
+              transform: 'scale(0.9)',
+              transformOrigin: 'center',
+            }}></div>
         </div>
       </div>
     );
